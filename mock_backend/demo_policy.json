@@ -1,0 +1,8 @@
+{
+  "policy_version": "demo-1",
+  "monitoring": {"enabled": true, "days": [0, 1, 2, 3, 4, 5, 6], "start": "00:00", "end": "23:59"},
+  "activity": {"sample_interval_seconds": 30, "idle_threshold_seconds": 300},
+  "screenshots": {"enabled": false, "interval_seconds": 15},
+  "exclusions": {"apps": ["KeePass.exe", "1Password.exe", "Bitwarden.exe"], "blur_regions": []}
+}
+

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "winagent"
+version = "0.1.0"
+description = "Windows Desktop Monitoring Agent (POC) for the Employee Monitoring & Workforce Productivity System"
+requires-python = ">=3.11"
+dependencies = [
+    "requests>=2.32,<3",
+    "psutil>=6.0,<8",
+    "Pillow>=10.4,<12",
+    "mss>=9.0,<10",
+    "pywin32>=306; sys_platform == 'win32'",
+    "pystray>=0.19,<1; sys_platform == 'win32'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3,<9",
+    "jsonschema>=4.23,<5",
+    "PyYAML>=6.0,<7",
+    "pyinstaller>=6.10,<7; sys_platform == 'win32'",
+]
+
+[project.scripts]
+winagent = "winagent.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["winagent*", "mock_backend*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "windows_manual: needs a real Windows machine; deselected in CI (see docs/test-plan.md)",
+]
+addopts = "-m 'not windows_manual'"

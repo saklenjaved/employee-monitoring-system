@@ -1,0 +1,287 @@
+openapi: 3.0.3
+info:
+  title: Windows Agent API (TAD section 10)
+  version: 0.1.0
+  description: |
+    Six agent-facing capabilities exposed by the existing Django REST Framework backend.
+    Proposed contract for the POC. The backend team must confirm paths and shapes before integration.
+    Ownership rule: the server resolves organization and employee from the device credential.
+    Any organization_id or employee_id sent by the agent is ignored and must not be trusted.
+servers:
+  - url: https://api.example.invalid/api/agent/v1
+    description: Placeholder. Set in config `[api] base_url`. Must be https.
+security:
+  - deviceBearer: []
+paths:
+  /devices/register/:
+    post:
+      summary: Device registration (TAD 10, device registration)
+      operationId: registerDevice
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: Device registered. Credential is returned once.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisterResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '403': { description: Registration code not valid for this employee. }
+        '429': { description: Too many attempts. }
+  /config/:
+    get:
+      summary: Agent configuration and policy (TAD 10, configuration / policy)
+      operationId: getAgentConfig
+      responses:
+        '200':
+          description: Current policy for this device.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PolicyResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /events/batch/:
+    post:
+      summary: Activity ingestion (TAD 10, activity ingestion)
+      operationId: ingestEvents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventBatch'
+      responses:
+        '200':
+          description: Batch processed. Duplicates are reported, not re-stored.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BatchResult'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '413': { description: Batch or payload too large. }
+        '429': { description: Rate limited. Retry with backoff. }
+  /screenshots/authorize/:
+    post:
+      summary: Screenshot upload authorization (TAD 10, upload authorization)
+      operationId: authorizeScreenshotUpload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenshotAuthorizeRequest'
+      responses:
+        '200':
+          description: Upload authorized. Server re-checked policy.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenshotAuthorizeResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { description: Policy denies screenshots now. }
+  /screenshots/{screenshot_id}/complete/:
+    post:
+      summary: Screenshot upload completion (TAD 10, upload completion)
+      operationId: completeScreenshotUpload
+      parameters:
+        - name: screenshot_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScreenshotCompleteRequest'
+      responses:
+        '200':
+          description: Metadata updated and audit entry written.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScreenshotCompleteResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /heartbeat/:
+    post:
+      summary: Agent heartbeat and status (TAD 10, heartbeat / status)
+      operationId: sendHeartbeat
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Heartbeat'
+      responses:
+        '200':
+          description: Heartbeat accepted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HeartbeatResponse'
+        '401': { $ref: '#/components/responses/Error' }
+components:
+  securitySchemes:
+    deviceBearer:
+      type: http
+      scheme: bearer
+      description: Device credential issued at registration. Short-lived; rotated by re-registration.
+  responses:
+    Error:
+      description: Error envelope. Never echoes tokens or signed URLs.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+  schemas:
+    Error:
+      type: object
+      required: [code, detail]
+      properties:
+        code: { type: string }
+        detail: { type: string }
+    RegisterRequest:
+      type: object
+      required: [registration_code, device_name, os_version, agent_version]
+      additionalProperties: false
+      properties:
+        registration_code: { type: string, minLength: 6, maxLength: 128 }
+        device_name: { type: string, maxLength: 128 }
+        os_version: { type: string, maxLength: 64, description: 'Example: Windows 11 10.0.26100' }
+        architecture: { type: string, enum: [x64] }
+        agent_version: { type: string, maxLength: 32 }
+    RegisterResponse:
+      type: object
+      required: [device_id, credential, expires_at]
+      properties:
+        device_id: { type: string, format: uuid }
+        credential: { type: string, description: 'Opaque device credential. Store with DPAPI only.' }
+        expires_at: { type: string, format: date-time }
+    PolicyResponse:
+      type: object
+      required: [policy_version, monitoring, activity, screenshots, exclusions]
+      properties:
+        policy_version: { type: string }
+        monitoring:
+          type: object
+          required: [enabled, days, start, end]
+          properties:
+            enabled: { type: boolean }
+            days: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, description: 'Monday=0' }
+            start: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+            end: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+        activity:
+          type: object
+          properties:
+            sample_interval_seconds: { type: integer, minimum: 5, maximum: 300 }
+            idle_threshold_seconds: { type: integer, minimum: 60, maximum: 3600 }
+        screenshots:
+          type: object
+          required: [enabled]
+          properties:
+            enabled: { type: boolean, default: false }
+            interval_seconds: { type: integer, minimum: 60, maximum: 3600 }
+        exclusions:
+          type: object
+          properties:
+            apps: { type: array, items: { type: string, maxLength: 128 } }
+            blur_regions: { type: array, items: { $ref: '#/components/schemas/Rect' } }
+    Rect:
+      type: object
+      required: [x, y, w, h]
+      properties:
+        x: { type: integer, minimum: 0 }
+        y: { type: integer, minimum: 0 }
+        w: { type: integer, minimum: 1 }
+        h: { type: integer, minimum: 1 }
+    EventBatch:
+      type: object
+      required: [events]
+      additionalProperties: false
+      properties:
+        events:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items: { $ref: '#/components/schemas/Event' }
+    Event:
+      description: Defined in docs/event-schema.json (Event). Repeated here for the endpoint.
+      type: object
+      required: [event_id, event_type, captured_at, payload]
+      additionalProperties: false
+      properties:
+        event_id: { type: string, format: uuid }
+        event_type: { type: string, enum: [app_focus, activity_sample, website_visit, session_state] }
+        captured_at: { type: string, format: date-time }
+        payload: { type: object }
+    BatchResult:
+      type: object
+      required: [accepted, duplicates, rejected]
+      properties:
+        accepted: { type: array, items: { type: string, format: uuid } }
+        duplicates: { type: array, items: { type: string, format: uuid } }
+        rejected: { type: array, items: { type: string, format: uuid } }
+    ScreenshotAuthorizeRequest:
+      type: object
+      required: [screenshot_id, captured_at, content_type, byte_size, sha256]
+      additionalProperties: false
+      properties:
+        screenshot_id: { type: string, format: uuid }
+        captured_at: { type: string, format: date-time }
+        content_type: { type: string, enum: [image/png] }
+        byte_size: { type: integer, minimum: 1, maximum: 10485760 }
+        sha256: { type: string, pattern: '^[a-f0-9]{64}$' }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        redaction_applied: { type: boolean }
+    ScreenshotAuthorizeResponse:
+      type: object
+      required: [screenshot_id, upload_url, upload_method, expires_at]
+      properties:
+        screenshot_id: { type: string, format: uuid }
+        upload_url: { type: string, format: uri, description: 'Short-lived, object-specific pre-signed S3 URL. Never logged.' }
+        upload_method: { type: string, enum: [PUT] }
+        upload_headers: { type: object, additionalProperties: { type: string } }
+        expires_at: { type: string, format: date-time }
+    ScreenshotCompleteRequest:
+      type: object
+      required: [status]
+      additionalProperties: false
+      properties:
+        status: { type: string, enum: [uploaded, failed] }
+        error_code: { type: string, maxLength: 64 }
+    ScreenshotCompleteResponse:
+      type: object
+      required: [screenshot_id, status]
+      properties:
+        screenshot_id: { type: string, format: uuid }
+        status: { type: string }
+    Heartbeat:
+      type: object
+      required: [agent_version, sent_at, session_type, queue_depth]
+      additionalProperties: false
+      properties:
+        agent_version: { type: string, maxLength: 32 }
+        sent_at: { type: string, format: date-time }
+        last_successful_sync_at: { type: string, format: date-time, nullable: true }
+        session_type: { type: string, enum: [console, rdp, citrix, vdi, unknown] }
+        queue_depth: { type: integer, minimum: 0 }
+        last_error_code: { type: string, maxLength: 64, nullable: true }
+        monitoring_state: { type: string, enum: [active, paused_hours, paused_policy, unsupported_session, not_registered] }
+    HeartbeatResponse:
+      type: object
+      required: [acknowledged]
+      properties:
+        acknowledged: { type: boolean }
+        policy_changed: { type: boolean }

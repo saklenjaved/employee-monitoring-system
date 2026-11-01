@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+dist/
+build/
+*.spec
+.pytest_cache/
+*.egg-info/
+# Local runtime data; never commit credentials or screenshots
+*.bin
+screenshots/
+
+# Local demo artefacts (certificates, demo database, storage). Never commit.
+mock_backend/certs/
+mock_backend/data/
+demo_data/
+config.toml
+mock.log
+agent.log

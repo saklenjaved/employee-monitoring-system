@@ -1,0 +1,13 @@
+# Agent runtime (Windows)
+pywin32>=306          # foreground window, Windows APIs
+psutil>=6.0           # process name from process id
+mss>=9.0              # screen capture for screenshots
+Pillow>=10.4          # PNG encode and blur/redaction
+requests>=2.32        # HTTPS calls to the backend (certificate verification on)
+pystray>=0.19         # system tray icon
+
+# Tests and local mock backend
+pytest>=8.3           # test runner
+jsonschema>=4.23      # checks event samples against docs/event-schema.json
+PyYAML>=6.0           # reads docs/api-contract.yaml in tests
+pyinstaller>=6.10     # optional: builds winagent.exe with build.ps1
