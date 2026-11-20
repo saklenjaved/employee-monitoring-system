@@ -1,0 +1,13 @@
+{% for error in form.non_field_errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+{% for field in form %}
+  {% if field.is_hidden %}
+    {{ field }}
+  {% else %}
+    <div class="field">
+      <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+      {{ field }}
+      {% for error in field.errors %}<p class="field-error">{{ error }}</p>{% endfor %}
+      {% if field.help_text %}<p class="help">{{ field.help_text|safe }}</p>{% endif %}
+    </div>
+  {% endif %}
+{% endfor %}

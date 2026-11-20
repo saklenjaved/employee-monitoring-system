@@ -1,0 +1,18 @@
+{% autoescape off %}
+Hello,
+
+You were invited to {{ organization_name }} with the {{ role_label }} role in Employee Monitoring.
+
+Your activation code is:
+
+    {{ code }}
+
+To activate your account, open {{ activation_url }}, enter your email address ({{ email }}) and this code.
+The code works once and expires in {{ expiry_hours }} hours.
+
+If you already have an Employee Monitoring password, use it after activating.
+If you are new to the system, choose a password on the activation page.
+
+This email does not contain a password. Never share your activation code.
+If you did not expect this email, you can ignore it. Nothing happens until the code is used.
+{% endautoescape %}

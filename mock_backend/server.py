@@ -9,7 +9,7 @@ It is a demo, not a backend. Device tokens are stored as SHA-256 hashes. Event p
 stored in clear in the local demo database so you can inspect them with `python -m mock_backend.show`.
 
 Run:
-  python -m mock_backend.server --cert mock_backend/certs/cert.pem --key mock_backend/certs/key.pem
+  python -m mock_backend.server --cert backend/certs/cert.pem --key backend/certs/key.pem
 """
 
 from __future__ import annotations
@@ -34,6 +34,7 @@ API_PREFIX = "/api/agent/v1"
 MOCK_STORAGE_PREFIX = "/mock-s3/"
 DEFAULT_DEMO_CODE = "DEMO-LOCAL-0001"
 TOKEN_DAYS = 30
+MOCK_START_ID = "3f0c9a8e-1b2d-4c3e-9f4a-5b6c7d8e9f01"
 UPLOAD_TTL_SECONDS = 300
 MAX_JSON_BYTES = 2 * 1024 * 1024
 MAX_IMAGE_BYTES = 10 * 1024 * 1024
@@ -390,7 +391,9 @@ class MockHandler(BaseHTTPRequestHandler):
         if not isinstance(body.get("agent_version"), str) or not isinstance(body.get("session_type"), str):
             raise _BadRequest("agent_version and session_type are required")
         self.server.store.add_heartbeat(device["device_id"], body)
-        self._send(200, {"acknowledged": True, "policy_changed": False})
+        # Stands in for an employee who has already pressed Start on the dashboard, so the agent collects.
+        start = {"id": MOCK_START_ID, "authorized_seconds": 8 * 60 * 60}
+        self._send(200, {"acknowledged": True, "policy_changed": False, "start": start})
 
     def _sign(self, sid: str, expires: int) -> str:
         return hmac.new(self.server.signing_key, f"{sid}|{expires}|PUT".encode("utf-8"), hashlib.sha256).hexdigest()

@@ -1,0 +1,107 @@
+{% load tz %}
+{% timezone 'Asia/Kolkata' %}
+{% for pc in waiting_pcs %}
+<div class="card pc-card pc-approve" id="pairing">
+  <div class="pc-card-head">
+    <div>
+      <h2>Approve this PC?</h2>
+      <p class="muted">Your PC is asking to connect for monitoring.</p>
+    </div>
+    <span class="status wait">Needs your approval</span>
+  </div>
+  <p><strong>{{ pc.device_name }}</strong> is waiting. Approve only if this is your computer.</p>
+  <form method="post" action="{% url 'pairing_approve' pc.pk %}" class="pc-action">
+    {% csrf_token %}
+    <label for="approve-password-{{ pc.pk }}">Your password</label>
+    <input id="approve-password-{{ pc.pk }}" type="password" name="current_password" autocomplete="current-password" required>
+    <button type="submit">Approve this PC</button>
+  </form>
+</div>
+{% endfor %}
+
+{% if connection == "not_connected" %}
+<div class="card pc-card" id="monitoring">
+  <div class="pc-card-head">
+    <div>
+      <h2>PC connection</h2>
+      <p class="muted">Set up monitoring on your computer in four steps.</p>
+    </div>
+    {% if waiting_pcs %}<span class="status wait">Approval needed</span>{% else %}<span class="status bad">Not connected</span>{% endif %}
+  </div>
+  <p>Install WinAgent on your PC. When it connects, an <strong>Approve this PC</strong> button appears here. Enter your password once.</p>
+  <ol class="stages" aria-label="Connection steps">
+    <li data-step="1" class="{% if waiting_pcs %}done{% else %}current{% endif %}" {% if not waiting_pcs %}aria-current="step"{% endif %}>Download WinAgent</li>
+    <li data-step="2" class="{% if waiting_pcs %}done{% else %}current{% endif %}" {% if not waiting_pcs %}aria-current="step"{% endif %}>Install WinAgent</li>
+    <li data-step="3" class="{% if waiting_pcs %}current{% endif %}" {% if waiting_pcs %}aria-current="step"{% endif %}>Approve this PC</li>
+    <li data-step="4">PC connected</li>
+  </ol>
+  {% if not waiting_pcs %}
+  <form method="post" action="{% url 'install_package' %}" class="pc-action">
+    {% csrf_token %}
+    <h3>Install WinAgent on this PC?</h3>
+    <p class="help">WinAgent runs in the background. It shows only status and app or window names, never what you type.</p>
+    <label><input type="checkbox" name="consent" value="yes" required> I agree to install WinAgent on this PC</label>
+    <button type="submit">Download WinAgent setup</button>
+    <p class="help">Open the downloaded <strong>WinAgentSetup</strong> file once. It installs WinAgent in the background, with no command window. This page then asks you to approve the PC.</p>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<div class="card pc-card" id="monitoring">
+  <div class="pc-card-head">
+    <div>
+      <h2>PC connection</h2>
+      <p class="muted">Your PC is approved. It reconnects by itself.</p>
+    </div>
+    {% if approved_pc %}<span class="status wait">Connecting</span>
+    {% elif monitoring == "monitoring_active" %}<span class="status ok">Monitoring on</span>
+    {% elif monitoring == "starting" %}<span class="status wait">Starting</span>
+    {% elif monitoring == "monitoring_paused" %}<span class="status wait">Monitoring paused</span>
+    {% elif monitoring == "start_requested" %}<span class="status wait">Start requested</span>
+    {% elif monitoring == "device_offline" %}<span class="status bad">PC offline</span>
+    {% elif monitoring == "error" %}<span class="status bad">Needs attention</span>
+    {% elif monitoring == "awaiting_consent" %}<span class="status wait">Admin Approval Required</span>
+    {% else %}<span class="status wait">Waiting for Admin Approval</span>{% endif %}
+  </div>
+
+  <ol class="stages" aria-label="Connection steps">
+    <li data-step="1" class="done">Download WinAgent</li>
+    <li data-step="2" class="done">Install WinAgent</li>
+    <li data-step="3" class="done">Approve this PC</li>
+    <li data-step="4" class="{% if monitoring == 'monitoring_active' %}done{% else %}current{% endif %}" {% if monitoring != 'monitoring_active' %}aria-current="step"{% endif %}>PC connected</li>
+  </ol>
+
+  {% if approved_pc %}
+  <p><strong>{{ approved_pc.device.name }} is approved.</strong> WinAgent is finishing the connection on your PC. This takes a few seconds, and this page updates by itself. You do not need to download or approve anything again.</p>
+  {% else %}
+  {% include "devices/_sync_status.html" %}
+
+  {% if monitoring == "monitoring_active" %}
+    <p><strong>Monitoring Active.</strong> The agent confirmed that it is running on your PC.</p>
+  {% elif monitoring == "starting" %}
+    <p><strong>Starting.</strong> The agent on your PC has been asked to start. This can take up to a few minutes. The status changes when the agent confirms.</p>
+  {% elif monitoring == "monitoring_paused" %}
+    <p><strong>Monitoring Paused.</strong> The agent has the start, but nothing is collected now: it is outside your organization's monitoring hours, or this is a remote session. It resumes by itself.</p>
+  {% elif monitoring == "start_requested" %}
+    <p><strong>Start Requested.</strong> Monitoring was started, but your PC has not been seen lately. Turn it on and sign in; it starts within a few minutes.</p>
+  {% elif monitoring == "device_offline" %}
+    <p><strong>Device Offline.</strong> Your PC has not been seen lately. Turn it on and sign in. WinAgent runs in the background.</p>
+  {% elif monitoring == "error" %}
+    <p><strong>Error.</strong> Monitoring did not start on your PC. Ask your administrator to start monitoring again.</p>
+  {% elif monitoring == "awaiting_consent" %}
+    <p><strong>Admin Approval Required.</strong> Your administrator approved monitoring for your PC. Confirm below to start it.</p>
+  {% else %}
+    <p><strong>WinAgent Installed – Waiting for Admin Approval</strong></p>
+    <p>Your WinAgent has been successfully installed. Please wait while your administrator reviews and approves monitoring activation.</p>
+  {% endif %}
+
+  {% if monitoring == "awaiting_consent" %}
+    <form method="post" action="{% url 'monitoring_start' %}" class="pc-action">
+      {% csrf_token %}
+      <button type="submit">Approve &amp; Start Monitoring</button>
+    </form>
+  {% endif %}
+  {% endif %}
+</div>
+{% endif %}
+{% endtimezone %}

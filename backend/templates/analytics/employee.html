@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% load analytics_extras tz %}
+{% block title %}{% if own %}My dashboard{% else %}{{ employee.full_name }}{% endif %}{% endblock %}
+{% block crumbs %}{% if not own %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>{{ employee.full_name }}{% endif %}{% endblock %}
+{% block content %}
+<style>
+  /* Employee dashboard (own view). Account stays compact; the PC connection card gets the main column. */
+  .approve-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 18px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, #f59e0b 12%, var(--c-surface)); border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); }
+  .approve-link { display: inline-flex; align-items: center; height: 38px; padding: 0 16px; border-radius: 8px; background: var(--c-primary-solid); color: #fff; font-weight: 600; text-decoration: none; white-space: nowrap; }
+  .approve-link:hover, .approve-link:focus-visible { outline: none; filter: brightness(1.08); }
+  .own-hero { display: grid; grid-template-columns: minmax(260px, 320px) minmax(0, 1fr); gap: 18px; align-items: start; margin-bottom: 18px; }
+  .own-hero > * { min-width: 0; }
+  .own-hero > div { display: block; }
+  .own-hero > div > .card { margin: 0; }
+  .acct { display: flex; flex-direction: column; gap: 16px; }
+  .acct-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .acct-id .avatar { flex: none; width: 48px; height: 48px; font-size: 1.1em; }
+  .acct-id strong { display: block; font-size: 1.05em; overflow-wrap: anywhere; }
+  .acct-id div span { display: block; color: var(--c-muted); font-size: .88em; overflow-wrap: anywhere; }
+  .acct-id .avatar { display: grid; place-items: center; color: #fff; }
+  .acct-list { margin: 0; }
+  .acct-list > div { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid var(--c-border); }
+  .acct-list dt { color: var(--c-muted); font-size: .92em; }
+  .acct-list dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; }
+  .own-hero .pc-card { padding: 24px 26px; }
+  .own-hero .pc-card .pc-action { max-width: 460px; }
+  /* Setup steps as a horizontal stepper; vertical on phones. */
+  .own-hero .stages { display: flex; gap: 0; margin: 18px 0 6px; padding: 0; list-style: none; }
+  .own-hero .stages li { position: relative; flex: 1 1 0; min-width: 0; padding: 30px 4px 0; border: 0; text-align: center; font-size: .86em; color: var(--c-muted); }
+  .own-hero .stages li::before { left: 50%; top: 0; width: 20px; height: 20px; margin: 0 0 0 -10px; border-width: 2px; }
+  .own-hero .stages li::after { content: ""; position: absolute; top: 9px; left: calc(-50% + 16px); right: calc(50% + 16px); height: 2px; background: var(--c-border); }
+  .own-hero .stages li:first-child::after { display: none; }
+  .own-hero .stages li.done::after { background: var(--c-success); }
+  .own-hero .stages li.current { font-weight: 600; }
+  .own-hero .stages li.done { color: var(--c-text); }
+  .own-hero .stages li::before { content: attr(data-step); display: grid; place-items: center; font-size: 11px; font-weight: 700; color: var(--c-muted); }
+  .own-hero .stages li.done::before { content: "✓"; color: #fff; }
+  .own-hero .stages li.current::before { color: #fff; }
+  .own-hero .stages li.done::before, .own-hero .stages li.current::before { line-height: 16px; }
+  .own-hero .next-step { margin-top: 18px; padding: 16px 18px; border-radius: 10px; background: var(--c-bg); border: 1px solid var(--c-border); }
+  .own-hero .next-step h3 { margin: 0 0 4px; font-size: 1em; }
+  @media (max-width: 900px) { .own-hero { grid-template-columns: minmax(0, 1fr); } }
+  @media (max-width: 600px) {
+    .own-hero .pc-card { padding: 18px 16px; }
+    .own-hero .stages { flex-direction: column; gap: 6px; }
+    .own-hero .stages li { flex: none; text-align: left; padding: 9px 12px 9px 40px; border: 1px solid var(--c-border); border-radius: 10px; }
+    .own-hero .stages li::before { left: 10px; top: 50%; margin: -10px 0 0 0; }
+    .own-hero .stages li::after { display: none; }
+  }
+</style>
+<div class="page-header">
+  <div>
+    {% if own %}
+      <h1>Hello, {{ user.full_name|default:user.email }}</h1>
+      <p class="muted">{% timezone 'Asia/Kolkata' %}{% now "l, j F Y" %}{% endtimezone %} &middot; Your connection, monitoring and activity.</p>
+    {% else %}
+      <h1>{{ employee.full_name }}</h1>
+      <p class="muted">Connection and activity for this employee.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="dash-hero{% if own %} own-hero{% endif %}">
+  <div class="card dash-account{% if own %} acct{% endif %}">
+    {% if own %}
+    <div class="acct-id">
+      <span class="avatar" aria-hidden="true">{{ user.email|slice:":1" }}</span>
+      <div>{% if user.full_name %}<strong>{{ user.full_name }}</strong><span>{{ user.email }}</span>{% else %}<strong>{{ user.email }}</strong>{% endif %}</div>
+    </div>
+    <dl class="acct-list">
+      <div><dt>Organization</dt><dd>{{ user.organization.name }}</dd></div>
+      <div><dt>Role</dt><dd>{{ user.get_role_display }}</dd></div>
+      <div><dt>Account status</dt><dd><span class="status ok">Active</span></dd></div>
+    </dl>
+    {% else %}
+    <div class="section-title"><h2>Account</h2></div>
+    <div class="identity">
+      <span class="avatar" aria-hidden="true">{{ employee.email|slice:":1" }}</span>
+      <div><strong>{{ employee.full_name }}</strong><span>{{ employee.email }}</span></div>
+    </div>
+    <dl class="details">
+      <dt>Role</dt><dd>{{ employee.get_role_display }}</dd>
+      <dt>Status</dt><dd>{% if employee.is_active %}Active{% else %}Deactivated{% endif %}</dd>
+    </dl>
+    {% endif %}
+  </div>
+  {% if own %}
+  <div id="device-status" hx-get="{% url 'dashboard_me' %}" hx-trigger="every {% if connecting or monitoring == 'awaiting_consent' or monitoring == 'starting' %}4{% else %}20{% endif %}s [!(document.querySelector('#device-status input[type=password]') || {}).value]" hx-select="#device-status" hx-swap="outerHTML">
+    {% if monitoring == "awaiting_consent" %}
+    <div class="approve-banner" role="alert">
+      <div><strong>Approve monitoring to start.</strong> Your administrator asked to start monitoring on your PC. It starts about a minute after you approve.</div>
+      <a class="approve-link" href="#monitoring">Review and approve</a>
+    </div>
+    {% endif %}
+    {% include "devices/_monitoring_card.html" %}
+  </div>
+  {% else %}
+  <div>{% include "analytics/_employee_live.html" %}</div>
+  {% endif %}
+</div>
+<div class="card">
+  <div class="section-title"><h2>{% if own %}My usage{% else %}Usage{% endif %}</h2></div>
+  {% include "analytics/_filters.html" %}
+  <div class="five-up">{% include "analytics/_stats.html" with stats=report %}</div>
+</div>
+
+<div class="card">
+  <div class="section-title"><h2>Application time per day</h2></div>
+  {% if own %}{% url 'trend_me' as trend_url %}{% else %}{% url 'trend_employee' employee.pk as trend_url %}{% endif %}
+  {% include "analytics/_trend.html" with url=trend_url|add:"?"|add:request.GET.urlencode %}
+</div>
+
+<div class="grid-2">
+  <div class="card">
+    <div class="section-title"><h2>Applications</h2></div>
+    {% include "analytics/_items.html" with items=report.apps empty="No applications recorded." %}
+  </div>
+  <div class="card">
+    <div class="section-title"><h2>Websites</h2></div>
+    {% include "analytics/_items.html" with items=report.websites empty="No websites recorded." %}
+  </div>
+</div>
+{% endblock %}

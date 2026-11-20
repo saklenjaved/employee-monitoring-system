@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Too many attempts{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Too many attempts</h1>
+  <p>Please wait a while and try again.</p>
+  <p><a href="{% url 'login' %}">Back to log in</a></p>
+</div>
+{% endblock %}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Platform dashboard{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Platform</h1>
+  <p class="muted">Counts only. Employee monitoring data is not shown here.</p>
+  <div class="tiles">
+    <div class="tile"><span class="tile-value">{{ report.organization_count }}</span><span class="tile-label">Organizations</span></div>
+    <div class="tile"><span class="tile-value">{{ report.active_organization_count }}</span><span class="tile-label">Active</span></div>
+    <div class="tile"><span class="tile-value">{{ report.inactive_organization_count }}</span><span class="tile-label">Inactive</span></div>
+    <div class="tile"><span class="tile-value">{{ report.employee_count }}</span><span class="tile-label">Employees</span></div>
+    <div class="tile"><span class="tile-value">{{ report.admin_count }}</span><span class="tile-label">Admin accounts</span></div>
+    <div class="tile"><span class="tile-value">{{ report.online_count }} / {{ report.device_count }}</span><span class="tile-label">Agents online</span></div>
+  </div>
+  <p><a class="button" href="{% url 'organization_list' %}">Manage organizations</a></p>
+</div>
+<div class="card">
+  <h2>Organizations</h2>
+  <table>
+    <tr><th>Name</th><th>Status</th><th>Employees</th><th>Admins</th><th>Agents online</th></tr>
+    {% for org in report.organizations %}
+      <tr>
+        <td>{{ org.name }}</td>
+        <td>{% if org.is_active %}Active{% else %}Deactivated{% endif %}</td>
+        <td>{{ org.employee_count }}</td>
+        <td>{{ org.admin_count }}</td>
+        <td>{{ org.online_count }} / {{ org.device_count }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="muted">No organizations yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>Recent administrative activity</h2>
+  <table>
+    <tr><th>When</th><th>Who</th><th>Action</th><th>Organization</th></tr>
+    {% for entry in report.recent_activity %}
+      <tr>
+        <td>{{ entry.created_at|date:"j M Y H:i" }}</td>
+        <td>{{ entry.actor_email }}</td>
+        <td>{{ entry.action }}</td>
+        <td>{{ entry.organization.name|default:"-" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">Nothing yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

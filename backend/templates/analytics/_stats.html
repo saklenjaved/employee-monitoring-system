@@ -1,0 +1,21 @@
+{% load analytics_extras %}
+<div class="tiles">
+  <div class="tile"><span class="tile-value">{{ stats.app_seconds|duration }}</span><span class="tile-label">Application time</span></div>
+  <div class="tile"><span class="tile-value">{{ stats.productive_percent|percent }}</span><span class="tile-label">Productive share</span></div>
+  <div class="tile"><span class="tile-value">{{ stats.activity_percent|percent }}</span><span class="tile-label">Activity</span></div>
+  <div class="tile"><span class="tile-value">{{ stats.active_seconds|duration }}</span><span class="tile-label">Active time</span></div>
+  <div class="tile"><span class="tile-value">{{ stats.idle_seconds|duration }}</span><span class="tile-label">Idle time</span></div>
+</div>
+<h3>Productive, unproductive and neutral</h3>
+{% if stats.app_seconds %}
+  <div class="splitbar" role="img" aria-label="Share of application time by category">
+    {% for key, label in categories %}{% with seconds=stats.category_seconds|lookup:key %}{% if seconds %}<span class="seg cat-{{ key }}" style="width: {{ seconds|share:stats.app_seconds }}%">{{ label }}</span>{% endif %}{% endwith %}{% endfor %}
+  </div>
+  <table class="legend">
+    {% for key, label in categories %}{% with seconds=stats.category_seconds|lookup:key %}
+      <tr><td><span class="badge cat-{{ key }}">{{ label }}</span></td><td>{{ seconds|duration }}</td><td>{{ seconds|share:stats.app_seconds }}%</td></tr>
+    {% endwith %}{% endfor %}
+  </table>
+{% else %}
+  <p class="muted">No application time recorded for these dates.</p>
+{% endif %}

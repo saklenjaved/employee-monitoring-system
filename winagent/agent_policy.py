@@ -26,6 +26,7 @@ class AgentPolicy:
     idle_threshold_seconds: int
     screenshots: ScreenshotPolicy
     excluded_apps: frozenset[str] = field(default_factory=frozenset)
+    sync_interval_seconds: int = 60
 
 
 def parse_policy(raw: dict[str, Any], local_monitoring: MonitoringConfig, local_shots: ScreenshotConfig) -> AgentPolicy:
@@ -38,6 +39,7 @@ def parse_policy(raw: dict[str, Any], local_monitoring: MonitoringConfig, local_
     activity = raw.get("activity", {})
     sample = _bounded(activity.get("sample_interval_seconds"), 5, 300, local_monitoring.sample_interval_seconds)
     idle = _bounded(activity.get("idle_threshold_seconds"), 60, 3600, local_monitoring.idle_threshold_seconds)
+    sync = _bounded(activity.get("sync_interval_seconds"), 30, 900, local_monitoring.sync_interval_seconds)
 
     shots_raw = raw.get("screenshots", {})
     exclusions = raw.get("exclusions", {})
@@ -59,6 +61,7 @@ def parse_policy(raw: dict[str, Any], local_monitoring: MonitoringConfig, local_
         idle_threshold_seconds=idle,
         screenshots=shot_policy,
         excluded_apps=apps,
+        sync_interval_seconds=sync,
     )
 
 

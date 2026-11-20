@@ -37,6 +37,8 @@ class ApiConfig:
     timeout_seconds: float = 20.0
     # Optional CA bundle for the local demo certificate. Verification stays on.
     ca_bundle: str | None = None
+    # Organization enrollment token, written by the installer. Sent only when this PC asks to connect.
+    org_token: str | None = None
 
     def __post_init__(self) -> None:
         parsed = urlparse(self.base_url)
@@ -52,7 +54,8 @@ class MonitoringConfig:
     sample_interval_seconds: int = SAMPLE_INTERVAL_DEFAULT
     sync_interval_seconds: int = 60
     heartbeat_interval_seconds: int = 300
-    policy_refresh_seconds: int = 3600
+    # Admin changes (for example turning screenshots on) reach the PC at the next refresh, so keep this short.
+    policy_refresh_seconds: int = 300
     batch_size: int = MAX_BATCH_SIZE
     queue_max_events: int = QUEUE_MAX_EVENTS_DEFAULT
     queue_max_age_hours: int = 72

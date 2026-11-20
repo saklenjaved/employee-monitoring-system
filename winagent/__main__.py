@@ -20,13 +20,14 @@ from pathlib import Path
 from winagent import __version__
 from winagent.config import ConfigError, load_config
 from winagent.credentials import CredentialStore
-from winagent.health import read_health, status_line
+from winagent.health import HealthSnapshot, read_health, status_line, write_health
 from winagent.http_client import HttpError
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="winagent", description="Windows Desktop Monitoring Agent (POC)")
-    sub = parser.add_subparsers(dest="command", required=True)
+    parser.set_defaults(config=_default_config())
+    sub = parser.add_subparsers(dest="command", required=False)
 
     reg = sub.add_parser("register", help="Register this device with an organization registration code")
     reg.add_argument("--config", required=True, type=Path)
@@ -44,11 +45,25 @@ def _build_parser() -> argparse.ArgumentParser:
 
     unreg = sub.add_parser("unregister", help="Remove the local device credential")
     unreg.add_argument("--config", required=True, type=Path)
+
+    connect = sub.add_parser("connect", help="Employee setup: paste the dashboard code in a window, then run")
+    connect.add_argument("--config", type=Path, default=_default_config())
     return parser
+
+
+def _default_config() -> Path:
+    """config.toml next to winagent.exe when packaged (a double-click starts in that folder), else in the current folder."""
+    if getattr(sys, "frozen", False):
+        return Path(sys.executable).resolve().parent / "config.toml"
+    return Path("config.toml")
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _build_parser().parse_args(argv)
+    # No command at all (for example a double-click on winagent.exe) runs the agent. A PC with no
+    # credential pairs itself: the employee approves it on their dashboard, with no code to type.
+    if args.command is None:
+        args.command = "run"
     try:
         cfg = load_config(args.config)
     except ConfigError as exc:
@@ -73,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
         reg = WinregAutostart()
         if args.action == "enable":
-            reg.enable(f'"{sys.executable}" -m winagent run --config "{args.config.resolve()}"')
+            reg.enable(_autostart_command(args.config))
             print("autostart enabled for this user")
         else:
             reg.disable()
@@ -90,8 +105,33 @@ def main(argv: list[str] | None = None) -> int:
         if not code:
             print("no registration code: pass --code or set [registration] code in the config", file=sys.stderr)
             return 2
-        return _register(cfg, code)
-    return _run(cfg)
+        error = _try_register(cfg, code)
+        if error:
+            print(f"registration failed: {error}", file=sys.stderr)
+            return 1
+        print("device registered")
+        return 0
+    if args.command == "connect":
+        return _connect(cfg, args.config)
+    return _run(cfg, args.config)
+
+
+def _autostart_command(config: Path) -> str:
+    """The command the Run key starts at sign-in. The config path is absolute, since the start folder is not known.
+
+    Sign-in must not open a console window, so a source run uses pythonw.exe (same as python.exe, no console).
+    The packaged winagent.exe is built with --windowed (see build.ps1) for the same reason.
+    """
+    if getattr(sys, "frozen", False):
+        return f'"{sys.executable}" run --config "{config.resolve()}"'
+    return f'"{_windowless_python()}" -m winagent run --config "{config.resolve()}"'
+
+
+def _windowless_python() -> str:
+    """pythonw.exe next to python.exe when it exists; otherwise the interpreter as it is."""
+    exe = Path(sys.executable)
+    pythonw = exe.with_name("pythonw.exe")
+    return str(pythonw) if exe.name.lower() == "python.exe" and pythonw.exists() else str(exe)
 
 
 def _protector():
@@ -100,8 +140,10 @@ def _protector():
     return DpapiProtector()
 
 
-def _register(cfg, code: str) -> int:
+def _try_register(cfg, code: str) -> str | None:
+    """Register this device. Returns None when it worked, or a short message when it did not."""
     from winagent.api_client import AgentApi
+    from winagent.connect_window import friendly_error
     from winagent.http_client import HttpClient
     from winagent.registration import RegistrationError, register_device
 
@@ -110,23 +152,87 @@ def _register(cfg, code: str) -> int:
     try:
         register_device(api, store, code, platform.node() or "device", platform.platform(), __version__)
     except (RegistrationError, HttpError) as exc:
-        print(f"registration failed: {exc}", file=sys.stderr)
-        return 1
-    print("device registered")
-    return 0
+        logging.getLogger("winagent").warning("registration failed: %s", type(exc).__name__)
+        return friendly_error(exc)
+    return None
 
 
-def _run(cfg) -> int:
+def _connect(cfg, config: Path) -> int:
+    """Employee path: no credential yet means show the paste-code window first. Then turn on start-at-sign-in and run."""
+    from winagent.connect_window import ask_for_code
+    from winagent.platform_win import WinregAutostart
+
+    store = CredentialStore(cfg.credential_path, _protector())
+    if store.load() is None:
+        if not ask_for_code(lambda code: _try_register(cfg, code)):
+            return 1
+        WinregAutostart().enable(_autostart_command(config))
+    return _run(cfg, config)
+
+
+def _pair_this_pc(cfg, config: Path) -> bool:
+    """Connect this PC through the employee's dashboard approval. Turns on start-at-sign-in once connected."""
+    import webbrowser
+
+    from winagent.api_client import AgentApi
+    from winagent.http_client import HttpClient
+    from winagent.pairing import DASHBOARD_MARKER, dashboard_url, open_dashboard_once, pair_this_pc
+    from winagent.platform_win import WinregAutostart
+
+    store = CredentialStore(cfg.credential_path, _protector())
+    api = AgentApi(HttpClient(cfg.api.base_url, cfg.api.timeout_seconds, lambda: None, ca_bundle=cfg.api.ca_bundle))
+    if not cfg.api.org_token:
+        logging.getLogger("winagent").error("config has no enrollment token; reinstall WinAgent with /ORGTOKEN")
+        return False
+    details = {
+        "device_name": platform.node() or "device",
+        "os_version": platform.platform(),
+        "agent_version": __version__,
+        "org_token": cfg.api.org_token,
+    }
+    stop = threading.Event()
+    marker = cfg.data_dir / DASHBOARD_MARKER
+    paired = pair_this_pc(
+        api,
+        store,
+        details,
+        dashboard_url(cfg.api.base_url),
+        stop_requested=stop.is_set,
+        wait=stop.wait,
+        # Once per install or pairing, even across restarts and sign-ins.
+        open_browser=lambda url: open_dashboard_once(url, marker, webbrowser.open),
+    )
+    if paired:
+        marker.unlink(missing_ok=True)  # a later pairing (after a revoke) opens the dashboard once again
+        WinregAutostart().enable(_autostart_command(config))
+    return paired
+
+
+def _run(cfg, config: Path) -> int:
+    """Run the agent. If the server rejects its credential, forget it and connect again, without a reinstall."""
     from winagent.bootstrap import build_agent
 
-    agent, tray_hook = build_agent(cfg, __version__)
+    store = CredentialStore(cfg.credential_path, _protector())
     stop = threading.Event()
-    if tray_hook is not None:
-        tray_hook(stop, lambda: agent.health)
-    try:
-        agent.run_forever(stop)
-    except KeyboardInterrupt:
-        stop.set()
+    tray_started = False
+    agent = None
+    while not stop.is_set():
+        if store.load() is None:
+            write_health(cfg.health_path, HealthSnapshot(agent_version=__version__, monitoring_state="awaiting_pairing"))
+            if not _pair_this_pc(cfg, config):
+                return 1
+        agent, tray_hook = build_agent(cfg, __version__)
+        if tray_hook is not None and not tray_started:
+            tray_hook(stop, lambda: agent.health)
+            tray_started = True
+        try:
+            agent.run_forever(stop)
+        except KeyboardInterrupt:
+            stop.set()
+        if stop.is_set():
+            break
+        logging.getLogger("winagent").info("credential rejected; connecting this PC again")
+        store.clear()
     logging.getLogger("winagent").info("shutdown complete")
     return 0
 

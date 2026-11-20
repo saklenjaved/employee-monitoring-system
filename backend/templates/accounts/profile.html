@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}My profile{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>My profile</h1>
+  <p class="muted">Email, role and organization are set by your administrator. Contact them to change these.</p>
+  <dl class="details">
+    <dt>Email</dt><dd>{{ user.email }}</dd>
+    <dt>Role</dt><dd>{{ user.get_role_display }}</dd>
+    <dt>Organization</dt><dd>{{ user.organization.name|default:"None (platform)" }}</dd>
+  </dl>
+</div>
+<div class="card">
+  <h2>Edit name</h2>
+  <form method="post">
+    {% csrf_token %}
+    {% include "includes/_form_fields.html" %}
+    <div class="actions">
+      <button type="submit">Save profile</button>
+      <a href="{% url 'password_change' %}">Change password</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

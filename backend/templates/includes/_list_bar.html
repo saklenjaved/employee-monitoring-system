@@ -1,0 +1,16 @@
+{# HTMX: typing or changing a filter reloads only the page body. The ids keep focus in the search box. #}
+<form method="get" class="list-bar" hx-get="{{ request.path }}" hx-trigger="input delay:300ms, submit" hx-target="#main" hx-select="#main" hx-swap="outerHTML" hx-push-url="true">
+  <input type="hidden" name="sort" value="{{ listing.sort }}">
+  <input type="hidden" name="dir" value="{{ listing.direction }}">
+  <input type="search" id="list-search" name="q" value="{{ listing.query }}" placeholder="Search" aria-label="Search">
+  {% for option in listing.filters %}
+    <select id="filter-{{ option.name }}" name="{{ option.name }}" aria-label="{{ option.label }}">
+      <option value="">All: {{ option.label }}</option>
+      {% for value, label in option.choices %}
+        <option value="{{ value }}"{% if value == option.selected %} selected{% endif %}>{{ label }}</option>
+      {% endfor %}
+    </select>
+  {% endfor %}
+  <noscript><button type="submit" class="secondary">Apply</button></noscript>
+  {% if listing.filtered %}<a href="{{ request.path }}">Clear</a>{% endif %}
+</form>

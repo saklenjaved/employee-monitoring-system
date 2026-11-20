@@ -33,6 +33,24 @@ class AgentApi:
         }
         return self._http.post_json("devices/register/", body, auth=False)
 
+    def create_pairing_request(
+        self, device_name: str, os_version: str, agent_version: str, org_token: str
+    ) -> dict[str, Any]:
+        body = {
+            "org_token": org_token,
+            "device_name": device_name,
+            "os_version": os_version,
+            "agent_version": agent_version,
+        }
+        return self._http.post_json("pairing/requests/", body, auth=False)
+
+    def poll_pairing(self, request_id: str, poll_token: str) -> dict[str, Any]:
+        return self._http.get_json(f"pairing/requests/{request_id}/", auth=False, bearer=poll_token)
+
+    def renew_credential(self) -> dict[str, Any]:
+        """Ask for a fresh credential, using the current one. No employee approval needed."""
+        return self._http.post_json("devices/credential/renew/", {})
+
     def get_config(self) -> dict[str, Any]:
         return self._http.get_json("config/")
 
@@ -57,6 +75,8 @@ class AgentApi:
         last_successful_sync_at: datetime | None,
         last_error_code: str | None,
         monitoring_state: str,
+        monitoring_start_id: str | None = None,
+        focus: Mapping[str, str] | None = None,
     ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "agent_version": agent_version,
@@ -65,8 +85,13 @@ class AgentApi:
             "queue_depth": queue_depth,
             "monitoring_state": monitoring_state,
         }
+        # Only the focused app, and its title when allowed. Left out entirely when there is nothing current.
+        if focus:
+            body.update({"focus_app": focus["focus_app"], "focus_title": focus["focus_title"]})
         if last_successful_sync_at:
             body["last_successful_sync_at"] = last_successful_sync_at.isoformat().replace("+00:00", "Z")
         if last_error_code:
             body["last_error_code"] = last_error_code
+        if monitoring_start_id:
+            body["monitoring_start_id"] = monitoring_start_id
         return self._http.post_json("heartbeat/", body)

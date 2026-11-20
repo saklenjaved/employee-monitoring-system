@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Audit logs{% endblock %}
+{% block content %}
+<style>
+  /* Audit logs page. Uses the page tokens from base.html, with the same card look as the Admin dashboard. */
+  .al-head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: flex-end; justify-content: space-between; margin-bottom: 18px; }
+  .al-head h1 { margin: 0 0 4px; }
+  .al-head p { margin: 0; max-width: 680px; }
+  .al-total { font-size: .9em; color: var(--c-muted); margin: 0; }
+  .al-total strong { color: var(--c-text); font-size: 1.25em; }
+  .al-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  @media (min-width: 900px) { .al-cards { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .al-card { min-height: 96px; padding: 16px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; min-width: 0; display: flex; flex-direction: column; justify-content: space-between; }
+  .al-card-label { margin: 0; color: var(--c-muted); font-size: .85em; }
+  .al-card-value { margin: 6px 0 0; font-size: 1.6em; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .al-panel { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; overflow: hidden; }
+  .al-filters { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 14px 16px; border-bottom: 1px solid var(--c-border); }
+  @media (min-width: 760px) { .al-filters { grid-template-columns: minmax(180px, 2fr) repeat(4, minmax(0, 1fr)) auto; align-items: end; } }
+  .al-filters label { display: grid; gap: 4px; font-size: .82em; color: var(--c-muted); font-weight: 600; }
+  .al-filters input, .al-filters select { width: 100%; box-sizing: border-box; height: 38px; }
+  .al-filters .al-buttons { display: flex; gap: 8px; align-items: center; }
+  .al-filters .al-buttons button { height: 38px; padding: 0 14px; box-sizing: border-box; }
+  .al-reset { font-size: .9em; white-space: nowrap; }
+  .al-error { margin: 0; padding: 10px 16px; color: var(--c-danger); font-weight: 600; font-size: .9em; border-bottom: 1px solid var(--c-border); }
+  .al-table { width: 100%; border-collapse: collapse; }
+  .al-table th { text-align: left; font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--c-border); background: var(--c-bg); white-space: nowrap; }
+  .al-table td { padding: 12px 14px; border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: .92em; height: 56px; }
+  .al-table tbody tr:hover td { background: color-mix(in srgb, var(--c-primary) 5%, var(--c-surface)); }
+  .al-table tr:last-child td { border-bottom: 0; }
+  .al-when { white-space: nowrap; }
+  .al-when-date { display: block; font-weight: 600; }
+  .al-when-time { display: block; color: var(--c-muted); font-size: .9em; font-variant-numeric: tabular-nums; }
+  .al-user { display: block; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .al-org { display: block; color: var(--c-muted); font-size: .85em; }
+  .al-action { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; white-space: nowrap; }
+  .al-desc { display: block; max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .al-target { display: block; color: var(--c-muted); font-size: .85em; }
+  .al-muted { color: var(--c-muted); }
+  .al-badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .8em; font-weight: 600; white-space: nowrap; }
+  .al-badge::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .al-badge.active { background: color-mix(in srgb, #059669 14%, var(--c-surface)); color: var(--c-success-text); }
+  .al-badge.pending { background: color-mix(in srgb, #d97706 14%, var(--c-surface)); color: var(--c-warn); }
+  .al-badge.bad { background: color-mix(in srgb, #dc2626 12%, var(--c-surface)); color: var(--c-danger); }
+  .al-badge.recorded { background: var(--c-bg); color: var(--c-muted); }
+  .al-footer { padding: 12px 16px; border-top: 1px solid var(--c-border); }
+  .al-footer p { margin: 0; }
+  .al-empty { text-align: center; padding: 36px 20px; }
+  .al-empty p { margin: 0 auto; max-width: 440px; }
+  @media (max-width: 760px) {
+    .al-table thead { display: none; }
+    .al-table, .al-table tbody, .al-table tr, .al-table td { display: block; width: 100%; }
+    .al-table tr { padding: 12px 14px; border-bottom: 1px solid var(--c-border); }
+    .al-table td { border: 0; padding: 3px 0; height: auto; }
+    .al-table td[data-label]::before { content: attr(data-label) ": "; color: var(--c-muted); font-size: .85em; }
+    .al-user, .al-desc { max-width: 100%; }
+  }
+</style>
+
+<header class="al-head">
+  <div>
+    <h1>Audit logs</h1>
+    <p class="muted">Every important activity in your organization is recorded here: account changes, monitoring, devices and access to screenshots. Entries cannot be changed or removed.</p>
+  </div>
+  <p class="al-total"><strong>{{ summary.total }}</strong> event{{ summary.total|pluralize }} recorded</p>
+</header>
+
+<section class="al-cards" aria-label="Summary">
+  <article class="al-card">
+    <p class="al-card-label">Total events</p>
+    <p class="al-card-value">{{ summary.total }}</p>
+  </article>
+  <article class="al-card">
+    <p class="al-card-label">Today's activities</p>
+    <p class="al-card-value">{{ summary.today }}</p>
+  </article>
+  <article class="al-card">
+    <p class="al-card-label">User activities</p>
+    <p class="al-card-value">{{ summary.users }}</p>
+  </article>
+  <article class="al-card">
+    <p class="al-card-label">Security events</p>
+    <p class="al-card-value">{{ summary.security }}</p>
+  </article>
+</section>
+
+<div class="al-panel">
+  <form method="get" class="al-filters" role="search" aria-label="Filter audit logs">
+    <label>Search
+      <input type="search" name="q" value="{{ listing.query }}" placeholder="User, activity or detail" maxlength="100">
+    </label>
+    <label>Action
+      <select name="action">
+        <option value="">All actions</option>
+        {% for value, label in listing.filters.0.choices %}<option value="{{ value }}"{% if value == listing.filters.0.selected %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        <option value="">All statuses</option>
+        {% for value, label in listing.filters.1.choices %}<option value="{{ value }}"{% if value == listing.filters.1.selected %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>From
+      <input type="date" name="from" value="{{ date_from }}">
+    </label>
+    <label>To
+      <input type="date" name="to" value="{{ date_to }}">
+    </label>
+    <div class="al-buttons">
+      <button type="submit">Apply</button>
+      {% if listing.filtered %}<a class="al-reset" href="{{ request.path }}">Reset</a>{% endif %}
+    </div>
+  </form>
+  {% if date_error %}<p class="al-error" role="alert">{{ date_error }}</p>{% endif %}
+
+  <div class="table-wrap">
+    <table class="al-table">
+      <thead>
+        <tr><th>Date &amp; time ({{ zone_label }})</th><th>User</th><th>Action</th><th>Description</th><th>IP address</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for row in listing.page %}
+          <tr>
+            <td class="al-when" data-label="Date &amp; time">
+              <time class="al-when-date" datetime="{{ row.created_at|date:'c' }}">{{ row.local_date }}</time>
+              <span class="al-when-time">{{ row.local_time }} · {{ row.ago }} ago</span>
+            </td>
+            <td data-label="User">
+              <span class="al-user" title="{{ row.actor_email|default:'System' }}">{{ row.actor_email|default:"System" }}</span>
+              {% if user.role == "super_admin" %}<span class="al-org">{{ row.organization.name|default:"Platform" }}</span>{% endif %}
+            </td>
+            <td data-label="Action"><span class="al-action">{{ row.action }}</span></td>
+            <td data-label="Description">
+              <span class="al-desc" title="{{ row.detail }}">{{ row.detail|default:"-" }}</span>
+              {% if row.target_type %}<span class="al-target">{{ row.target_type }} #{{ row.target_id }}</span>{% endif %}
+            </td>
+            <td data-label="IP address"><span class="al-muted" title="Not stored with audit entries yet">Not recorded</span></td>
+            <td data-label="Status">
+              {% if row.status == "Active" %}<span class="al-badge active">Active</span>
+              {% elif row.status == "Pending" %}<span class="al-badge pending">Pending</span>
+              {% elif row.status == "Blocked" or row.status == "Revoked" %}<span class="al-badge bad">{{ row.status }}</span>
+              {% else %}<span class="al-badge recorded">Recorded</span>{% endif %}
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="6">
+            <div class="al-empty">
+              {% if listing.filtered %}
+                <p class="muted">No entries match your search or filters. <a href="{{ request.path }}">Reset filters</a>.</p>
+              {% else %}
+                <p class="muted">No audit entries yet. Activity appears here as your team uses the system.</p>
+              {% endif %}
+            </div>
+          </td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="al-footer">
+    {% include "includes/_list_footer.html" %}
+  </div>
+</div>
+{% endblock %}

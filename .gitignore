@@ -11,9 +11,12 @@ build/
 screenshots/
 
 # Local demo artefacts (certificates, demo database, storage). Never commit.
-mock_backend/certs/
+backend/certs/
 mock_backend/data/
 demo_data/
 config.toml
 mock.log
 agent.log
+
+# Local secrets: email credentials and passwords. Never commit.
+.env

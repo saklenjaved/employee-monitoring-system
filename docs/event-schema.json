@@ -35,7 +35,7 @@
       "additionalProperties": false,
       "properties": {
         "process_name": { "type": "string", "maxLength": 260, "description": "Executable file name only, for example chrome.exe." },
-        "window_title": { "type": "string", "maxLength": 256, "description": "Only sent when the config flag capture_window_title is enabled. Off by default." },
+        "window_title": { "type": "string", "maxLength": 256, "description": "Sent when the agent config flag capture_window_title is enabled. The Django backend checks it but does not store it." },
         "duration_seconds": { "type": "number", "minimum": 0 }
       }
     },

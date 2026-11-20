@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Activate your account{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Activate your account</h1>
+  <p class="muted">Enter your email address and the 8-digit activation code from your invitation email. The code works once and expires after 24 hours.</p>
+  <form method="post" id="activate-form">
+    {% csrf_token %}
+    {% include "includes/_form_fields.html" %}
+    <div class="actions">
+      <button type="submit" id="activate-submit">Activate account</button>
+    </div>
+  </form>
+  <p class="help">Already active? <a href="{% url 'login' %}">Sign in</a></p>
+</div>
+<script>
+  // Stop a double submit and show that the activation is in progress.
+  document.getElementById("activate-form").addEventListener("submit", function () {
+    var button = document.getElementById("activate-submit");
+    button.disabled = true;
+    button.textContent = "Activating…";
+  });
+</script>
+{% endblock %}

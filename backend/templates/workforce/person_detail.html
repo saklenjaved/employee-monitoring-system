@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ person.full_name }}{% endblock %}
+{% block crumbs %}<a href="{% url 'person_list' %}">Employees</a><span class="sep">/</span>{{ person.full_name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ person.full_name }}</h1>
+  <p>{{ person.email }} &middot; {{ person.get_role_display }} &middot;
+    {% if person.has_pending_invite %}Pending activation{% elif person.is_active %}Active{% else %}Deactivated{% endif %}</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+  </form>
+  {% if person.has_pending_invite %}
+  <form method="post" action="{% url 'person_resend_invite' person.pk %}" class="form-gap">
+    {% csrf_token %}
+    <p class="help">This person has not activated the account yet. Sending a new code makes the older code stop working.</p>
+    <button type="submit" class="secondary">Send a new activation code</button>
+  </form>
+  {% else %}
+  <form method="post" action="{% url 'person_set_active' person.pk %}" class="form-gap"{% if person.is_active %} data-confirm="Deactivate this person? They will be signed out and lose access until reactivated." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
+    {% csrf_token %}
+    {% if person.is_active %}
+      <input type="hidden" name="active" value="0">
+      <button type="submit" class="secondary">Deactivate</button>
+    {% else %}
+      <input type="hidden" name="active" value="1">
+      <button type="submit">Activate</button>
+    {% endif %}
+  </form>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Teams</h2>
+  <ul>
+    {% for membership in teams %}<li>{{ membership.team.name }}</li>{% empty %}<li class="muted">Not in any team.</li>{% endfor %}
+  </ul>
+</div>
+
+{% if person.role == "employee" %}
+{% include "workforce/_setup_card.html" %}
+
+<div class="card">
+  <h2>Devices</h2>
+  <p class="muted">A PC stays connected after approval. It reconnects by itself and needs no new download, unless you revoke it.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Name</th><th>Status</th><th>Last seen</th><th>Agent</th><th></th></tr>
+    {% for device in devices %}
+      <tr>
+        <td>{{ device.name }}</td>
+        <td>{% if not device.is_active %}<span class="muted"><span class="dot dot-revoked" aria-hidden="true"></span>Revoked</span>{% elif device.is_online %}<span class="dot dot-online" aria-hidden="true"></span>Online{% else %}<span class="dot dot-offline" aria-hidden="true"></span>Offline{% endif %}</td>
+        <td>{% if device.last_seen_at %}{{ device.last_seen_at|timesince }} ago{% else %}never{% endif %}</td>
+        <td>{{ device.agent_version }}</td>
+        <td>
+          {% if device.is_active %}
+            <form method="post" action="{% url 'device_revoke' device.pk %}" class="inline-form" data-confirm="Revoke this device? WinAgent on that PC will stop working." data-confirm-label="Revoke" data-confirm-danger>
+              {% csrf_token %}<button type="submit" class="secondary">Revoke</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="muted">No devices registered.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Agent status</h2>
+  <p class="muted">Reported by the agent on each check-in. Updates when the agent next reports.</p>
+  <div class="table-wrap">
+  <table>
+    <tr><th>Name</th><th>Monitoring</th><th>Session</th><th>Queue</th><th>Last upload</th><th>Last error</th><th>Rules version</th></tr>
+    {% for device in devices %}
+      <tr>
+        <td>{{ device.name }}</td>
+        <td>{{ device.monitoring_state|default:"not reported" }}</td>
+        <td>{{ device.session_type|default:"unknown" }}</td>
+        <td>{{ device.queue_depth }}</td>
+        <td>{{ device.last_successful_sync_at|default:"never" }}</td>
+        <td>{{ device.last_error_code|default:"none" }}</td>
+        <td>{{ device.policy_version_served|default:"none" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="7" class="muted">No agent status yet.</td></tr>
+    {% endfor %}
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

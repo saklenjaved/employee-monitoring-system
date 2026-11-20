@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}New organization{% endblock %}
+{% block crumbs %}<a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span>New organization{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>New organization</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create</button>
+    <a href="{% url 'organization_list' %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

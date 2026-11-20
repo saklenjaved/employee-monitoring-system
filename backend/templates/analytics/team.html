@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% load analytics_extras %}
+{% block title %}{{ report.team.name }}{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>{{ report.team.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{{ report.team.name }}</h1>
+  <p class="muted">{{ report.team.department.name|default:"No department" }}</p>
+  {% include "analytics/_filters.html" %}
+  {% include "analytics/_stats.html" with stats=report.totals %}
+</div>
+<div class="card">
+  <h2>Application time per day</h2>
+  {% url 'trend_team' report.team.pk as trend_url %}
+  {% include "analytics/_trend.html" with url=trend_url|add:"?"|add:request.GET.urlencode %}
+</div>
+<div class="card">
+  <h2>Employees</h2>
+  <table>
+    <tr><th>Employee</th><th>Application time</th><th>Productive share</th><th>Activity</th></tr>
+    {% for row in report.employees %}
+      <tr>
+        <td><a href="{% url 'dashboard_employee' row.user.pk %}">{{ row.user.full_name }}</a></td>
+        <td>{{ row.app_seconds|duration }}</td>
+        <td>{{ row.productive_percent|percent }}</td>
+        <td>{{ row.activity_percent|percent }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">No employees in this team.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>Top applications</h2>
+  {% include "analytics/_items.html" with items=report.apps empty="No applications recorded." %}
+</div>
+<div class="card">
+  <h2>Top websites</h2>
+  {% include "analytics/_items.html" with items=report.websites empty="No websites recorded." %}
+</div>
+{% endblock %}

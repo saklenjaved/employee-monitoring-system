@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Organizations{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Organizations</h1>
+  <p><a class="button" href="{% url 'organization_create' %}">New organization</a></p>
+  <table>
+    <tr><th>Name</th><th>Status</th><th>Admins</th><th></th></tr>
+    {% for organization in organizations %}
+      <tr>
+        <td>{{ organization.name }}</td>
+        <td>{% if organization.is_active %}Active{% else %}Deactivated{% endif %}</td>
+        <td>{{ organization.admin_count }}</td>
+        <td>
+          <a href="{% url 'organization_admin_create' organization.pk %}">Add Admin</a>
+          <form method="post" action="{% url 'organization_set_active' organization.pk %}" class="inline-form"{% if organization.is_active %} data-confirm="Deactivate this organization? Its people will be signed out and cannot use their devices." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
+            {% csrf_token %}
+            {% if organization.is_active %}
+              <input type="hidden" name="active" value="0">
+              <button type="submit" class="secondary">Deactivate</button>
+            {% else %}
+              <input type="hidden" name="active" value="1">
+              <button type="submit">Activate</button>
+            {% endif %}
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="4" class="muted">No organizations yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

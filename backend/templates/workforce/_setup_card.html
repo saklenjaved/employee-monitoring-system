@@ -1,0 +1,35 @@
+<div class="card" id="setup-status" hx-get="{% url 'person_setup_status' person.pk %}" hx-trigger="every 10s" hx-swap="outerHTML">
+  <h2>Monitoring setup</h2>
+  <ol class="steps">
+    {% for label, done in setup %}
+      <li>{% if done %}<strong>Done.</strong>{% else %}<span class="muted">To do.</span>{% endif %} {{ label }}</li>
+    {% endfor %}
+  </ol>
+  {% if has_pc %}
+    <p>Monitoring: {% include "devices/_monitoring_badge.html" with status=monitoring %}</p>
+  {% endif %}
+  {% if next_setup %}
+    <p>Next: {{ next_setup|lower }}.</p>
+  {% elif monitoring == "monitoring_active" %}
+    <p>The agent confirmed the start and is collecting on this employee's PC.</p>
+  {% elif monitoring == "monitoring_paused" %}
+    <p>The agent has the start but is not collecting now: outside monitoring hours, or a remote session. It resumes by itself.</p>
+  {% elif monitoring == "awaiting_consent" %}
+    <p>Approval sent. Monitoring starts only after the employee confirms on their dashboard.</p>
+  {% elif monitoring == "starting" %}
+    <p>Start sent. The agent picks it up at its next check-in (about a minute).</p>
+  {% elif monitoring == "start_requested" %}
+    <p>Start sent, but the PC has not been seen lately. It starts when the PC is back online within 10 minutes; otherwise start again.</p>
+  {% elif monitoring == "error" %}
+    <p>The last start ran out before the agent confirmed it, or the agent reported an error. Start again; if it repeats, check the agent log on the PC.</p>
+  {% else %}
+    <p>WinAgent is installed and registered. Click Start monitoring to ask the employee to approve it.</p>
+  {% endif %}
+  {% if person.is_active and has_pc and monitoring != "monitoring_active" and monitoring != "starting" and monitoring != "monitoring_paused" and monitoring != "awaiting_consent" %}
+    <form method="post" action="{% url 'admin_monitoring_start' person.pk %}">
+      {% csrf_token %}
+      <p class="help">Their PC is installed and registered. Starting asks the employee to confirm on their dashboard. Monitoring starts only after they confirm.</p>
+      <button type="submit">Start monitoring</button>
+    </form>
+  {% endif %}
+</div>

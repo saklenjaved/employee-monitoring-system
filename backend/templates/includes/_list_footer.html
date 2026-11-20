@@ -1,0 +1,12 @@
+{% with page=listing.page %}
+  {% if page.paginator.count %}
+    <p class="muted">Showing {{ page.start_index }} to {{ page.end_index }} of {{ page.paginator.count }}.</p>
+  {% endif %}
+  {% if page.paginator.num_pages > 1 %}
+    <nav class="pager" aria-label="Pages" hx-boost="true" hx-target="#main" hx-select="#main" hx-swap="outerHTML" hx-push-url="true">
+      {% if page.has_previous %}<a href="?{{ listing.querystring }}&amp;page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      <span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+      {% if page.has_next %}<a href="?{{ listing.querystring }}&amp;page={{ page.next_page_number }}">Next</a>{% endif %}
+    </nav>
+  {% endif %}
+{% endwith %}

@@ -1,0 +1,38 @@
+{# Refreshed every 10 seconds (analytics.dashboards.employee_live_panel). The root carries the refresh, so it keeps going. #}
+<div class="card" id="employee-live" hx-get="{% url 'dashboard_employee_live' employee.pk %}" hx-trigger="every 10s" hx-swap="outerHTML">
+  <h2>Live status</h2>
+  <div class="agent-line">
+    {% if live.agent.state == "up_to_date" %}<span class="dot dot-online" aria-hidden="true"></span><strong>Online</strong>
+    {% elif live.agent.state == "uploading" %}<span class="dot dot-online" aria-hidden="true"></span><strong>Online</strong>, uploading {{ live.agent.queue_depth }} queued item{{ live.agent.queue_depth|pluralize }}
+    {% elif live.agent.state == "offline" %}<span class="dot dot-offline" aria-hidden="true"></span><strong>Offline</strong>
+      {% if live.agent.queue_depth %}, {{ live.agent.queue_depth }} item{{ live.agent.queue_depth|pluralize }} waiting on the PC{% endif %}
+    {% else %}<span class="muted">No PC connected yet.</span>{% endif %}
+  </div>
+  {% if live.agent.state != "not_connected" %}
+  <dl class="details">
+    <dt>Now using</dt>
+    <dd>{% if live.agent.focus_app %}{{ live.agent.focus_app }}{% if live.agent.focus_title %} <span class="muted">{{ live.agent.focus_title }}</span>{% endif %}{% else %}<span class="muted">—</span>{% endif %}</dd>
+    <dt>Last seen</dt>
+    <dd>{{ live.agent.last_seen|date:"j M Y, H:i:s"|default:"never" }}</dd>
+    <dt>Last upload</dt>
+    <dd>{{ live.agent.last_sync|date:"j M Y, H:i:s"|default:"not yet" }}</dd>
+  </dl>
+  {% endif %}
+
+  <h3>Recent activity</h3>
+  <div class="table-wrap">
+    <table class="chart-table">
+      <tr><th>Time</th><th>Application</th><th>Length</th><th>State</th></tr>
+      {% for row in live.recent %}
+        <tr>
+          <td>{{ row.time|date:"j M, H:i:s" }}</td>
+          <td>{{ row.app }}</td>
+          <td>{{ row.seconds|floatformat:0 }} s</td>
+          <td>{% if row.state == "active" %}<span class="badge state-active">Active</span>{% elif row.state == "idle" %}<span class="badge state-idle">Idle</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">No activity received yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>

@@ -1,0 +1,14 @@
+{% load analytics_extras %}
+<table>
+  <tr><th>Name</th><th>Category</th><th>Employees</th><th>Time</th></tr>
+  {% for item in items %}
+    <tr>
+      <td>{{ item.name }}</td>
+      <td><span class="badge cat-{{ item.category }}">{{ item.category|category_label }}</span></td>
+      <td>{{ item.employees }}</td>
+      <td><span class="bar"><span style="width: {{ item.seconds|share:items.0.seconds }}%"></span></span> {{ item.seconds|duration }}</td>
+    </tr>
+  {% empty %}
+    <tr><td colspan="4" class="muted">{{ empty }}</td></tr>
+  {% endfor %}
+</table>

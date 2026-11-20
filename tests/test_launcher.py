@@ -39,7 +39,7 @@ POLICY_JSON = {
 
 
 class Harness:
-    def __init__(self, tmp_path: Path, outcomes, session=None, foreground=None, registered=True):
+    def __init__(self, tmp_path: Path, outcomes, session=None, foreground=None, registered=True, authorized=True):
         self.cfg = AgentConfig(api=ApiConfig(BASE), data_dir=tmp_path)
         self.http = ScriptedSession(outcomes)
         self.api = AgentApi(HttpClient(BASE, 5, lambda: "tok" if registered else None, session=self.http))
@@ -60,6 +60,9 @@ class Harness:
             website=StubWebsiteMonitor(), screenshots=self.shots, session=self.session,
             clock=lambda: self.clock_value,
         )
+        if authorized:
+            # Most tests check collection itself. Tests of the start gate pass authorized=False.
+            self.agent._authorized_until = float("inf")
 
 
 def test_not_registered_collects_nothing(tmp_path):
@@ -171,3 +174,90 @@ def test_autostart_is_per_user_and_reversible():
     assert reg.is_enabled()
     reg.disable()
     assert not reg.is_enabled()
+
+
+# --- Start from the dashboard -------------------------------------------------------------------
+# The server decides when collection may run. Without a start, the agent collects nothing and asks often.
+
+START = {"id": "3f0c9a8e-1b2d-4c3e-9f4a-5b6c7d8e9f01", "authorized_seconds": 3600}
+
+
+def test_no_start_collects_nothing_and_asks_the_server_often(tmp_path):
+    h = Harness(tmp_path, [(200, POLICY_JSON), (200, {"start": None})], authorized=False)
+    assert h.agent.tick(TEN_AM) == "awaiting_start"
+    assert h.queue.depth() == 0
+    assert h.http.calls[-1]["json"]["monitoring_state"] == "awaiting_start"
+    assert "monitoring_start_id" not in h.http.calls[-1]["json"]
+
+
+def test_start_from_server_collects_and_reports_the_start_id(tmp_path):
+    h = Harness(tmp_path, [
+        (200, POLICY_JSON),                                        # tick 1: policy
+        (200, {"start": START}),                                   # tick 1: waiting heartbeat receives the start
+        (200, {"accepted": [], "duplicates": [], "rejected": []}),  # tick 2: flush
+        (200, {"start": START}),                                   # tick 2: heartbeat confirms the start
+    ], authorized=False)
+    assert h.agent.tick(TEN_AM) == "awaiting_start"
+    assert h.agent.tick(TEN_AM) == "active"
+    assert h.queue.depth() == 2
+    assert h.http.calls[-1]["json"]["monitoring_start_id"] == START["id"]
+
+
+def test_server_without_a_start_stops_collection(tmp_path):
+    empty_ack = (200, {"accepted": [], "duplicates": [], "rejected": []})
+    h = Harness(tmp_path, [(200, POLICY_JSON), empty_ack, (200, {"start": None}), (200, {"start": None})])
+    assert h.agent.tick(TEN_AM) == "active"
+    h.clock_value = 10
+    assert h.agent.tick(TEN_AM) == "awaiting_start"
+
+
+def test_a_screenshot_setting_from_the_server_is_logged_when_it_is_applied(tmp_path, caplog):
+    h = Harness(tmp_path, [(200, POLICY_JSON), (200, {"start": START})], authorized=False)
+    with caplog.at_level(logging.INFO, logger="winagent.launcher"):
+        h.agent.tick(TEN_AM)
+    assert "screenshot settings: enabled=" in caplog.text
+
+
+def test_policy_refresh_is_short_enough_for_admin_changes_to_reach_the_pc():
+    """Turning screenshots on in the dashboard must reach the PC within a few minutes, not an hour."""
+    assert MonitoringConfig().policy_refresh_seconds <= 300
+
+
+def test_start_runs_out_by_the_agent_clock_when_the_server_cannot_be_reached(tmp_path):
+    short = {"id": START["id"], "authorized_seconds": 600}
+    h = Harness(tmp_path, [(200, POLICY_JSON), (200, {"start": short}), (200, POLICY_JSON), (503, {})], authorized=False)
+    assert h.agent.tick(TEN_AM) == "awaiting_start"
+    h.clock_value = 601  # past the authorized time, and the next heartbeat fails (policy refresh is due by now)
+    assert h.agent.tick(TEN_AM) == "awaiting_start"
+    assert h.queue.depth() == 0
+
+
+def test_a_start_received_outside_hours_is_confirmed_as_paused_and_collects_nothing(tmp_path):
+    """Admin starts monitoring after hours: the agent keeps the start (so it does not run out) but collects nothing."""
+    h = Harness(tmp_path, [
+        (200, POLICY_JSON),            # tick 1: policy
+        (200, {"start": START}),       # tick 1: waiting heartbeat receives the start
+        (200, {"start": START}),       # tick 2: paused heartbeat confirms the start
+    ], authorized=False)
+    assert h.agent.tick(SIX_PM) == "awaiting_start"
+    assert h.agent.tick(SIX_PM) == "paused_hours"
+    beat = h.http.calls[-1]["json"]
+    assert beat["monitoring_state"] == "paused_hours"
+    assert beat["monitoring_start_id"] == START["id"]
+    assert h.queue.depth() == 0  # nothing collected outside hours
+
+
+def test_a_kept_start_begins_collecting_when_the_hours_open(tmp_path):
+    empty_ack = (200, {"accepted": [], "duplicates": [], "rejected": []})
+    h = Harness(tmp_path, [
+        (200, POLICY_JSON), (200, {"start": START}),  # tick 1 (after hours): receive the start
+        (200, {"start": START}),                      # tick 2 (after hours): confirm while paused
+        (200, POLICY_JSON),                           # tick 3: the 5-minute policy refresh is due
+        empty_ack, (200, {"start": START}),           # tick 3 (next morning): collect, flush, heartbeat
+    ], authorized=False)
+    h.agent.tick(SIX_PM)
+    h.agent.tick(SIX_PM)
+    h.clock_value = 400  # the heartbeat and sample timers are due again; the start is still authorized
+    assert h.agent.tick(TEN_AM + timedelta(days=1)) == "active"
+    assert h.queue.depth() == 2
+    assert h.http.calls[-1]["json"]["monitoring_start_id"] == START["id"]

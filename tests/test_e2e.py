@@ -82,7 +82,8 @@ def test_agent_sends_events_and_screenshot_to_mock_backend(cert_pair, tmp_path):
             clock=lambda: clock["t"],
         )
         now = datetime.now(timezone.utc)
-        for _ in range(3):  # three sample cycles, 31 s apart
+        # The first cycle only asks the backend for the start; collection begins on the next one.
+        for _ in range(4):  # four cycles, 31 s apart
             agent.tick(now)
             clock["t"] += 31
             now += timedelta(seconds=31)

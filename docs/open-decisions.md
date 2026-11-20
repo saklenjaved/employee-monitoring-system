@@ -5,7 +5,7 @@ Every decision below is a **default, to confirm**. These defaults were chosen so
 | # | Item | Default (to confirm) | Notes |
 |---|---|---|---|
 | 1 | Windows versions | Windows 10 and 11, 64-bit | Tested on Windows 11 only so far |
-| 2 | Install and start | Per-user, HKCU Run key, no admin rights | `winagent autostart enable` turns it on. It is NOT enabled automatically |
+| 2 | Install and start | Per-user, HKCU Run key, no admin rights. Silent Inno Setup installer (planned) | `winagent autostart enable` turns it on. It is NOT enabled automatically. See `docs/employee-pairing-plan.md` |
 | 3 | Idle threshold | 300 s | `monitoring.idle_threshold_seconds`, allowed 60..3600 |
 | 3 | Sampling interval | 30 s | `monitoring.sample_interval_seconds`, allowed 5..300 |
 | 4 | Screenshots | Off by default. When on, every 600 s, blur before upload, local file deleted after upload | Needs both the local config flag and the policy flag |
@@ -36,8 +36,8 @@ Every decision below is a **default, to confirm**. These defaults were chosen so
 
 ## Questions still open (TAD 13)
 
-1. Registration: registration code (used here) or employee sign-in?
-2. Installer technology (zip only for now).
+1. Registration: decided in `docs/employee-pairing-plan.md` (Admin setup window, employee approval with password). Code path kept for Admins.
+2. Installer technology: Inno Setup per-user installer chosen (`docs/employee-pairing-plan.md`). Code signing still open.
 3. Retention for failed screenshot uploads (this build deletes immediately).
 4. Window titles: keep on, or limit them?
 5. Encryption and retention rules for the offline queue (this build uses DPAPI and 72 h).

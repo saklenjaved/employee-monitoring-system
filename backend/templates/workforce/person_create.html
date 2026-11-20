@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}New person{% endblock %}
+{% block crumbs %}<a href="{% url 'person_list' %}">Employees</a><span class="sep">/</span>New person{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>New person</h1>
+  <p class="muted">The person receives an email with a link to choose a password.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create</button>
+    <a href="{% url 'person_list' %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

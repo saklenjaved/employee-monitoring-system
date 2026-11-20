@@ -1,6 +1,6 @@
 # Windows Desktop Monitoring Agent (POC)
 
-A simple Windows agent for the Employee Monitoring System, following the TAD in `docs/TAD.md`. It runs on your PC and talks to a small local mock backend over HTTPS. Nothing leaves your machine.
+A simple Windows agent for the Employee Monitoring System, following the agent TAD in `docs/TAD-windows-agent.md` (the platform TAD is `docs/TAD.md`). It runs on your PC and talks to a small local mock backend over HTTPS. Nothing leaves your machine.
 
 **Status:** proof of concept. Several TAD 13 items are still open (see `docs/open-decisions.md`). Code signing is a placeholder.
 
@@ -45,7 +45,7 @@ copy config.example.toml config.toml
 ## 3. Start the mock backend (terminal 1, leave it running)
 
 ```powershell
-.venv\Scripts\python -m mock_backend.server --cert mock_backend\certs\cert.pem --key mock_backend\certs\key.pem
+.venv\Scripts\python -m mock_backend.server --cert backend\certs\cert.pem --key backend\certs\key.pem
 ```
 
 It prints `Mock backend listening on https://127.0.0.1:8443/api/agent/v1/`. Stop it with Ctrl+C.

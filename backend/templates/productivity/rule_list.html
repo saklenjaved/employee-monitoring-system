@@ -1,0 +1,205 @@
+{% extends "base.html" %}
+{% block title %}Classification rules{% endblock %}
+{% block content %}
+<style>
+  /* Classification rules page. Page tokens come from base.html. Only classes that start with rl- are used here. */
+
+  /* Header and summary */
+  .rl-head { margin-bottom: 18px; }
+  .rl-head h1 { margin: 0 0 4px; }
+  .rl-head p { margin: 0; max-width: 720px; }
+  .rl-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  @media (min-width: 760px) { .rl-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .rl-stat { padding: 14px 16px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; min-width: 0; }
+  .rl-stat-label { margin: 0; color: var(--c-muted); font-size: .85em; display: flex; align-items: center; gap: 8px; }
+  .rl-stat-value { margin: 2px 0 0; font-size: 1.5em; font-weight: 700; letter-spacing: -.01em; }
+  .rl-dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; background: #94a3b8; }
+  .rl-dot.productive { background: #059669; }
+  .rl-dot.unproductive { background: #dc2626; }
+
+  /* Cards. The rules table is the main card; the New rule card sits under it at the same width. */
+  .rl-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; align-items: start; }
+  .rl-card { padding: 0; overflow: hidden; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; min-width: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, .04); }
+  .rl-card-head { padding: 16px 20px; border-bottom: 1px solid var(--c-border); }
+  .rl-card-head h2 { margin: 0 0 2px; font-size: 1.02em; }
+  .rl-card-head p { margin: 0; font-size: .88em; }
+  .rl-card-body { padding: 14px 20px; border-bottom: 1px solid var(--c-border); }
+
+  /* Filters: one row of four controls, all 40px tall. The row wraps only when the card is narrow. */
+  .rl-card .list-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; align-items: center; margin: 0; }
+  .rl-card .list-bar input[type=search],
+  .rl-card .list-bar select {
+    width: 100%; min-width: 0; height: 40px; box-sizing: border-box; margin: 0;
+    padding: 0 12px; font-size: .93em; line-height: normal;
+  }
+  .rl-card .list-bar select { padding-right: 34px; }
+  .rl-card .list-bar input[type=search] { grid-column: 1 / -1; }
+  .rl-card .list-bar > a { justify-self: start; white-space: nowrap; font-size: .92em; }
+  @media (min-width: 900px) {
+    .rl-card .list-bar { grid-template-columns: minmax(220px, 2fr) repeat(3, minmax(150px, 1fr)); }
+    .rl-card .list-bar input[type=search] { grid-column: auto; }
+  }
+
+  /* Table. A real table with a fixed minimum width. On a narrow card it scrolls sideways inside the card. */
+  .rl-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .rl-table { width: 100%; min-width: 760px; border-collapse: collapse; table-layout: auto; }
+  .rl-table th {
+    text-align: left; font-size: .76em; text-transform: uppercase; letter-spacing: .05em; font-weight: 600;
+    color: var(--c-muted); background: var(--c-bg); padding: 10px 16px; border-bottom: 1px solid var(--c-border);
+    white-space: nowrap; vertical-align: middle;
+  }
+  .rl-table td {
+    padding: 12px 14px; height: 56px; border-bottom: 1px solid var(--c-border); vertical-align: middle;
+    font-size: .93em; white-space: nowrap;
+  }
+  .rl-table tbody tr:last-child td { border-bottom: 0; }
+  .rl-table tbody tr:hover td { background: color-mix(in srgb, var(--c-primary) 4%, var(--c-surface)); }
+  /* Application names and domains stay on one line and are cut with an ellipsis. The full text is in the tooltip. */
+  .rl-name-cell { width: 100%; min-width: 180px; }
+  .rl-name {
+    display: block; max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; color: var(--c-text);
+  }
+
+  /* Badges */
+  .rl-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: .8em; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface)); color: var(--c-primary); }
+  .rl-pill.website { background: color-mix(in srgb, #0891b2 12%, var(--c-surface)); color: var(--c-teal); }
+  .rl-pill.muted-pill { background: var(--c-bg); color: var(--c-muted); }
+  .rl-cat { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 999px; font-size: .8em; font-weight: 600; white-space: nowrap; }
+  .rl-cat.productive { background: color-mix(in srgb, #059669 14%, var(--c-surface)); color: var(--c-success-text); }
+  .rl-cat.unproductive { background: color-mix(in srgb, #dc2626 12%, var(--c-surface)); color: var(--c-danger); }
+  .rl-cat.neutral { background: var(--c-bg); color: var(--c-muted); }
+
+  /* Change category: dropdown and Save on one line, both 36px tall. */
+  .rl-change { display: flex; gap: 8px; align-items: center; margin: 0; flex-wrap: nowrap; }
+  .rl-change select { width: 150px; height: 36px; box-sizing: border-box; margin: 0; padding: 0 32px 0 10px; font-size: .93em; line-height: normal; }
+  .rl-change button { height: 36px; margin: 0; padding: 0 16px; box-sizing: border-box; font-size: .93em; }
+
+  /* Focus, for keyboard users */
+  .rl-card a:focus-visible, .rl-card select:focus-visible, .rl-card input:focus-visible, .rl-card button:focus-visible,
+  .rl-form select:focus-visible, .rl-form input:focus-visible, .rl-form button:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+
+  /* Footer and empty state */
+  .rl-footer { padding: 12px 20px; border-top: 1px solid var(--c-border); }
+  .rl-footer p { margin: 0; }
+  .rl-empty { text-align: center; padding: 36px 20px; white-space: normal; }
+  .rl-empty p { margin: 0 auto; max-width: 420px; }
+
+  /* New rule form */
+  .rl-form .rl-field { display: grid; gap: 6px; margin-bottom: 14px; min-width: 0; }
+  .rl-form label { font-weight: 600; font-size: .92em; }
+  .rl-form select, .rl-form input { width: 100%; min-width: 0; box-sizing: border-box; height: 40px; margin: 0; }
+  .rl-form .rl-help { margin: 0; color: var(--c-muted); font-size: .85em; }
+  .rl-form .rl-error { margin: 0; color: var(--c-danger); font-size: .87em; font-weight: 600; }
+  .rl-form .rl-submit { height: 36px; margin: 4px 0 0; padding: 0 18px; box-sizing: border-box; font-size: .93em; }
+  .rl-form .rl-actions-row { display: flex; justify-content: flex-start; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>
+
+<header class="rl-head">
+  <h1>Classification rules</h1>
+  <p class="muted">A team rule wins over a whole-organization rule. A website rule also covers its subdomains. Items with no rule show up under <a href="{% url 'unclassified_list' %}">Unclassified</a>.</p>
+</header>
+
+<section class="rl-stats" aria-label="Rules summary">
+  <article class="rl-stat">
+    <p class="rl-stat-label">All rules</p>
+    <p class="rl-stat-value">{{ summary.total }}</p>
+  </article>
+  {% for item in summary.by_category %}
+    <article class="rl-stat">
+      <p class="rl-stat-label"><span class="rl-dot {{ item.value }}" aria-hidden="true"></span>{{ item.label }}</p>
+      <p class="rl-stat-value">{{ item.count }}</p>
+    </article>
+  {% endfor %}
+</section>
+
+<div class="rl-layout">
+  <section class="rl-card" aria-labelledby="rules-title">
+    <div class="rl-card-head">
+      <h2 id="rules-title">Rules</h2>
+      <p class="muted">Pick a new category and press Save. Changes apply to new usage data.</p>
+    </div>
+    <div class="rl-card-body">
+      {% include "includes/_list_bar.html" %}
+    </div>
+    <div class="rl-scroll">
+      <table class="rl-table">
+        {% include "includes/_list_head.html" %}
+        {% for rule in listing.page %}
+          <tr>
+            <td><span class="rl-pill{% if rule.item_type == 'website' %} website{% endif %}">{{ rule.get_item_type_display }}</span></td>
+            <td class="rl-name-cell"><span class="rl-name" title="{{ rule.pattern }}">{{ rule.pattern }}</span></td>
+            <td>{% if rule.team %}<span class="rl-pill">{{ rule.team.name }}</span>{% else %}<span class="rl-pill muted-pill">Whole organization</span>{% endif %}</td>
+            <td><span class="rl-cat {{ rule.category }}">{{ rule.get_category_display }}</span></td>
+            <td>
+              <form method="post" action="{% url 'rule_change' rule.pk %}" class="rl-change">
+                {% csrf_token %}
+                <label class="sr-only" for="rule-cat-{{ rule.pk }}">Category for {{ rule.pattern }}</label>
+                <select name="category" id="rule-cat-{{ rule.pk }}">
+                  {% for value, label in categories %}<option value="{{ value }}"{% if value == rule.category %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="secondary">Save</button>
+              </form>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="5">
+            <div class="rl-empty">
+              {% if listing.filtered %}
+                <p class="muted">No rules match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.</p>
+              {% else %}
+                <p class="muted">No rules yet. Create a rule with the form, or classify an item from the <a href="{% url 'unclassified_list' %}">Unclassified</a> page.</p>
+              {% endif %}
+            </div>
+          </td></tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div class="rl-footer">
+      {% include "includes/_list_footer.html" %}
+    </div>
+  </section>
+
+  <aside class="rl-card rl-form" aria-labelledby="new-rule-title">
+    <div class="rl-card-head">
+      <h2 id="new-rule-title">New rule</h2>
+      <p class="muted">Sets the category for one application or website.</p>
+    </div>
+    <div class="rl-card-body">
+      <form method="post">
+        {% csrf_token %}
+        {% if form.non_field_errors %}
+          {% for error in form.non_field_errors %}<p class="rl-error" role="alert">{{ error }}</p>{% endfor %}
+        {% endif %}
+        <div class="rl-field">
+          <label for="{{ form.item_type.id_for_label }}">Type</label>
+          {{ form.item_type }}
+          {% for error in form.item_type.errors %}<p class="rl-error">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="rl-field">
+          <label for="{{ form.pattern.id_for_label }}">{{ form.pattern.label }}</label>
+          {{ form.pattern }}
+          <p class="rl-help">{{ form.pattern.help_text }}</p>
+          {% for error in form.pattern.errors %}<p class="rl-error">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="rl-field">
+          <label for="{{ form.team.id_for_label }}">{{ form.team.label }}</label>
+          {{ form.team }}
+          <p class="rl-help">Choose a team to apply the rule to that team only.</p>
+          {% for error in form.team.errors %}<p class="rl-error">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="rl-field">
+          <label for="{{ form.category.id_for_label }}">Category</label>
+          {{ form.category }}
+          {% for error in form.category.errors %}<p class="rl-error">{{ error }}</p>{% endfor %}
+        </div>
+        <div class="rl-actions-row">
+          <button type="submit" class="rl-submit">Create rule</button>
+        </div>
+      </form>
+    </div>
+  </aside>
+</div>
+{% endblock %}

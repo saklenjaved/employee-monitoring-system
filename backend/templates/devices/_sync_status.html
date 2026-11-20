@@ -1,0 +1,12 @@
+<div class="sync-status sync-{{ sync.state }}">
+  {% if sync.state == "up_to_date" %}
+    <p><span class="dot dot-online" aria-hidden="true"></span><strong>Agent running.</strong> Everything is uploaded.
+      Last upload {% if sync.last_sync %}{{ sync.last_sync|date:"j M, H:i" }} IST{% else %}not yet{% endif %}.</p>
+  {% elif sync.state == "uploading" %}
+    <p><span class="dot dot-online" aria-hidden="true"></span><strong>Agent running.</strong> Uploading {{ sync.queue_depth }} item{{ sync.queue_depth|pluralize }}.</p>
+  {% elif sync.state == "offline" %}
+    <p><span class="dot dot-offline" aria-hidden="true"></span><strong>Agent not reporting.</strong>
+      {% if sync.queue_depth %}{{ sync.queue_depth }} item{{ sync.queue_depth|pluralize }} will upload when this PC reconnects.{% endif %}
+      Last seen {% if sync.last_seen %}{{ sync.last_seen|date:"j M, H:i" }} IST{% else %}never{% endif %}.</p>
+  {% endif %}
+</div>

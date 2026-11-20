@@ -15,10 +15,11 @@ def test_version_matches_pyproject():
     assert re.search(rf'^version = "{re.escape(__version__)}"$', text, re.M)
 
 
-def test_build_script_has_signing_placeholder_and_no_admin_steps():
+def test_build_script_has_optional_signing_and_no_admin_steps():
     script = (ROOT / "build.ps1").read_text(encoding="utf-8")
-    assert "Code signing placeholder" in script
+    assert "PFX_PATH" in script and "PFX_PASSWORD" in script and "TIMESTAMP_URL" in script
     assert "UNSIGNED" in script
+    assert "Write-Host $env:PFX_PASSWORD" not in script  # the password is never printed
     assert "RunAs" not in script and "Start-Process -Verb" not in script  # no elevation
     assert "pytest" in script  # tests gate the build
 

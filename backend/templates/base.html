@@ -1,0 +1,637 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%234f46e5'/%3E%3Cpath d='M9 16h14M16 9v14' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+  <title>{% block title %}Employee Monitoring{% endblock %}</title>
+  <script>
+    /* Applies the saved theme before anything is painted, so a page never flashes the wrong colors. Light by default. */
+    (function () {
+      var theme = "light";
+      try { if (localStorage.getItem("theme") === "dark") theme = "dark"; } catch (e) { /* storage blocked: Light */ }
+      document.documentElement.setAttribute("data-theme", theme);
+    })();
+  </script>
+  <style>
+    /* ============ Design tokens: change the look here ============ */
+    :root {
+      --c-bg: #f3f5fb;
+      --c-bg-glow-1: rgba(79, 70, 229, .14);
+      --c-bg-glow-2: rgba(6, 182, 212, .12);
+      --c-surface: #ffffff;
+      --c-surface-2: #f8f9fe;
+      --c-text: #111827;
+      --c-muted: #5b6475;
+      --c-border: #e5e7f0;
+      --c-primary: #4f46e5;
+      --c-primary-2: #6366f1;
+      --c-accent: #06b6d4;
+      --c-primary-hover: #4338ca;
+      --c-secondary: #475569;
+      --c-secondary-hover: #334155;
+      --c-success: #059669;
+      --c-success-bg: #d1fae5;
+      --c-danger: #dc2626;
+      --c-danger-bg: #fee2e2;
+      --c-nav: #ffffff;
+      --c-nav-text: #475569;
+      --c-input: #ffffff;
+      --brand-grad: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+      --btn-grad: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+      --radius-lg: 18px;
+      --radius: 12px;
+      --shadow-sm: 0 1px 2px rgba(17, 24, 39, .05);
+      --shadow: 0 4px 16px rgba(17, 24, 39, .07);
+      --shadow-lift: 0 16px 36px rgba(17, 24, 39, .14);
+      --font: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+      --content-max: 1180px;
+      /* Chart and status colors. Validated for color-blind separation; labels carry the meaning too. */
+      --cat-productive: #10b981;
+      --cat-neutral: #3b82f6;
+      --cat-unproductive: #f97316;
+      --cat-unclassified: #8b5cf6;
+      --cat-mixed: #94a3b8;
+      --color-online: #059669;
+      --color-offline: #94a3b8;
+      /* Names the chart script (static/js/app.js) reads. They follow the --c-* tokens above. */
+      --color-surface: var(--c-surface);
+      --color-text: var(--c-text);
+      --color-muted: var(--c-muted);
+      --color-border: var(--c-border);
+      --color-bg: var(--c-bg);
+      --c-primary-solid: #4f46e5; /* background of solid primary buttons; white text on it */
+      /* Text colors that must stay readable in both themes. */
+      --c-warn: #b45309;
+      --c-info: #1d4ed8;
+      --c-teal: #0e7490;
+      --c-success-text: #047857;
+      color-scheme: light;
+    }
+
+    /* Dark theme. Light is the default; the head script in this file sets data-theme="dark" only when the user chose it. */
+    :root[data-theme="dark"] {
+      --c-bg: #1a2030;
+      --c-bg-glow-1: rgba(99, 102, 241, .10);
+      --c-bg-glow-2: rgba(6, 182, 212, .07);
+      --c-surface: #2a3346;
+      --c-surface-2: #343e54;
+      --c-text: #e7ebf3;
+      --c-muted: #a6b0c3;
+      --c-border: #3d4860;
+      --c-primary: #8f97ff;
+      --c-primary-2: #6366f1;
+      --c-primary-hover: #6366f1;
+      --c-secondary: #3f4a5e;
+      --c-secondary-hover: #4b5870;
+      --c-success-bg: #173d31;
+      --c-danger: #f87171;
+      --c-danger-bg: #3f2228;
+      --c-nav: #1f2636;
+      --c-nav-text: #b8c2d6;
+      --c-input: #1e2535;
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, .25);
+      --shadow: 0 4px 16px rgba(0, 0, 0, .28);
+      --shadow-lift: 0 16px 36px rgba(0, 0, 0, .4);
+      --c-warn: #fbbf24;
+      --c-info: #93c5fd;
+      --c-teal: #67e8f9;
+      --c-success-text: #6ee7b7;
+      --c-primary-solid: #5558e3;
+      color-scheme: dark;
+    }
+
+    /* ============ Base ============ */
+    * { box-sizing: border-box; }
+    html { -webkit-text-size-adjust: 100%; }
+    body {
+      margin: 0; min-height: 100vh; font-family: var(--font); color: var(--c-text); line-height: 1.55;
+      background: radial-gradient(900px 500px at 8% -10%, var(--c-bg-glow-1), transparent 60%),
+                  radial-gradient(800px 500px at 100% 0%, var(--c-bg-glow-2), transparent 60%), var(--c-bg);
+      background-attachment: fixed;
+    }
+    a { color: var(--c-primary); text-underline-offset: 3px; }
+    h1 { font-size: 1.65em; margin: 0 0 14px; letter-spacing: -.01em; }
+    h2 { font-size: 1.2em; margin: 0 0 10px; }
+    h3 { font-size: 1.05em; margin: 12px 0 6px; }
+    .muted { color: var(--c-muted); }
+
+    /* ============ App shell: grouped sidebar, top bar, profile menu ============ */
+    :root { --sidebar-w: 252px; --sidebar-w-collapsed: 76px; }
+    .sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .i { width: 18px; height: 18px; flex-shrink: 0; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .app { min-height: 100vh; display: grid; grid-template-columns: var(--sidebar-w) minmax(0, 1fr); }
+    .app.sidebar-collapsed { grid-template-columns: var(--sidebar-w-collapsed) minmax(0, 1fr); }
+    .sidebar {
+      position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; min-width: 0;
+      padding: 14px 12px; background: var(--c-nav); border-right: 1px solid var(--c-border); overflow-x: hidden; overflow-y: auto;
+    }
+    .sidebar-head { display: flex; align-items: center; min-height: 64px; padding: 4px 6px 14px; border-bottom: 1px solid var(--c-border); margin-bottom: 6px; }
+    .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; color: var(--c-text); min-width: 0; }
+    .brand-text { font-weight: 800; font-size: 1.02em; line-height: 1.18; letter-spacing: -.01em; }
+    .brand-mark {
+      width: 34px; height: 34px; border-radius: 10px; background: var(--brand-grad); color: #fff; flex-shrink: 0;
+      display: grid; place-items: center; font-size: .95em; box-shadow: 0 6px 16px rgba(79, 70, 229, .35);
+    }
+    .sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+    .nav-group { margin-top: 8px; }
+    .nav-group > summary {
+      list-style: none; display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 8px;
+      cursor: pointer; font-size: .72em; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--c-muted); user-select: none;
+    }
+    .nav-group > summary::-webkit-details-marker { display: none; }
+    .nav-group > summary::after {
+      content: ""; width: 6px; height: 6px; margin-right: 4px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor;
+      transform: rotate(45deg); transition: transform .2s ease;
+    }
+    .nav-group:not([open]) > summary::after { transform: rotate(-45deg); }
+    .nav-links { list-style: none; margin: 2px 0 0; padding: 0; display: grid; gap: 2px; }
+    .nav-links a {
+      display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; color: var(--c-nav-text);
+      text-decoration: none; font-size: .93em; font-weight: 500; white-space: nowrap; transition: background .18s ease, color .18s ease;
+    }
+    .nav-links a:hover { background: color-mix(in srgb, var(--c-primary) 8%, transparent); color: var(--c-text); }
+    .nav-links a[aria-current="page"] {
+      color: var(--c-primary); background: color-mix(in srgb, var(--c-primary) 14%, transparent); font-weight: 600; box-shadow: inset 3px 0 0 var(--c-primary);
+    }
+    .sidebar-user {
+      display: flex; align-items: center; gap: 10px; min-width: 0; margin-top: 10px; padding: 10px; border-radius: 12px;
+      border: 1px solid var(--c-border); background: var(--c-surface); color: var(--c-text); text-decoration: none;
+    }
+    .sidebar-user .who { display: grid; gap: 4px; min-width: 0; }
+    .sidebar-user .email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .88em; font-weight: 600; }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%; background: var(--brand-grad); color: #fff; display: grid; place-items: center;
+      font-size: .8em; font-weight: 700; text-transform: uppercase; flex-shrink: 0;
+    }
+    .role-pill { justify-self: start; font-size: .72em; padding: 2px 8px; border-radius: 999px; background: color-mix(in srgb, var(--c-accent) 18%, transparent); color: var(--c-accent); font-weight: 700; }
+    .app-main { min-width: 0; display: flex; flex-direction: column; }
+    .topbar {
+      position: sticky; top: 0; z-index: 20; height: 60px; display: flex; align-items: center; gap: 12px; padding: 0 24px;
+      background: color-mix(in srgb, var(--c-bg) 86%, transparent); backdrop-filter: saturate(160%) blur(12px); -webkit-backdrop-filter: saturate(160%) blur(12px);
+      border-bottom: 1px solid var(--c-border);
+    }
+    .icon-btn {
+      width: 36px; height: 36px; padding: 0; display: inline-grid; place-items: center; border-radius: 10px; border: 1px solid var(--c-border);
+      background: var(--c-surface); color: var(--c-text); cursor: pointer; box-shadow: none;
+    }
+    .icon-btn:hover { background: var(--c-surface-2); transform: none; box-shadow: none; }
+    /* Theme toggle: the moon shows in Light mode, the sun in Dark mode. */
+    .theme-toggle .i-sun { display: none; }
+    :root[data-theme="dark"] .theme-toggle .i-moon { display: none; }
+    :root[data-theme="dark"] .theme-toggle .i-sun { display: block; }
+    .auth-theme { position: fixed; top: 16px; right: 16px; z-index: 5; }
+    .menu-btn { display: none; }
+    /* Breadcrumb trail above each page's title. Empty on pages that do not set one. */
+    .crumbs { display: block; margin: 0 0 8px; font-size: .88em; color: var(--c-muted); }
+    .crumbs:empty { display: none; }
+    .crumbs a { color: var(--c-primary); text-decoration: none; font-weight: 600; }
+    .crumbs a:hover, .crumbs a:focus-visible { text-decoration: underline; outline: none; }
+    .crumbs .sep { margin: 0 6px; opacity: .6; }
+    .crumb { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; color: var(--c-text); }
+    .topbar .spacer { flex: 1; }
+    .profile-menu { position: relative; }
+    .profile-menu > summary {
+      list-style: none; display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px;
+      border: 1px solid var(--c-border); background: var(--c-surface); cursor: pointer; color: var(--c-text); font-size: .9em;
+    }
+    .profile-menu > summary::-webkit-details-marker { display: none; }
+    .profile-email { max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .menu-pop {
+      position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; min-width: 210px; display: grid; gap: 2px; padding: 6px;
+      background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; box-shadow: var(--shadow); animation: pop-in .15s ease-out both;
+    }
+    .menu-pop a, .menu-pop button {
+      display: block; width: 100%; padding: 8px 10px; border-radius: 8px; text-align: left; text-decoration: none; font: inherit; font-size: .92em;
+      color: var(--c-text); background: none; border: 0; cursor: pointer; box-shadow: none;
+    }
+    .menu-pop a:hover, .menu-pop button:hover { background: var(--c-surface-2); transform: none; box-shadow: none; }
+    .menu-pop form { margin: 0; }
+    .scrim { display: none; }
+    a:focus-visible, summary:focus-visible { outline: 2px solid var(--c-primary); outline-offset: 2px; }
+
+    /* Desktop: the sidebar can collapse to icons. The toggle stays visible so it can be reopened. */
+    @media (min-width: 901px) {
+      .app.sidebar-collapsed .sidebar { padding: 14px 10px; }
+      .app.sidebar-collapsed .brand-text, .app.sidebar-collapsed .nav-label, .app.sidebar-collapsed .nav-group > summary,
+      .app.sidebar-collapsed .sidebar-user .who { display: none; }
+      .app.sidebar-collapsed .sidebar-head { justify-content: center; }
+      .app.sidebar-collapsed .nav-links a { justify-content: center; padding: 10px 0; }
+      .app.sidebar-collapsed .nav-group { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--c-border); }
+      .app.sidebar-collapsed .nav-group:first-of-type { border-top: 0; padding-top: 0; }
+      .app.sidebar-collapsed .sidebar-user { justify-content: center; padding: 8px 0; }
+    }
+
+    /* Phones and tablets: the sidebar becomes a drawer opened by the menu button. */
+    @media (max-width: 900px) {
+      .app, .app.sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
+      .sidebar {
+        position: fixed; top: 0; left: 0; bottom: 0; width: min(288px, 86vw); height: 100vh; z-index: 50;
+        transform: translateX(-104%); transition: transform .25s ease; box-shadow: var(--shadow-lift);
+      }
+      .app.nav-open .sidebar { transform: none; }
+      .app.nav-open .scrim { display: block; position: fixed; inset: 0; z-index: 40; background: rgba(15, 23, 42, .45); }
+      .menu-btn { display: inline-grid; }
+      .sidebar-toggle { display: none; }
+      .topbar { padding: 0 14px; gap: 10px; }
+      .profile-email { display: none; }
+    }
+    .user-box form { margin: 0; }
+
+    .content { width: 100%; max-width: var(--content-max); margin: 0 auto; padding: 28px 24px 48px; animation: rise .45s ease-out both; }
+    @keyframes rise { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+
+    /* Sign-in and password pages: no navigation, one centred card. */
+    .auth-page {
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 24px 16px;
+      background: radial-gradient(700px 420px at 15% 10%, var(--c-bg-glow-1), transparent 60%),
+                  radial-gradient(700px 420px at 90% 95%, var(--c-bg-glow-2), transparent 60%), var(--c-bg);
+    }
+    .auth-brand { margin-bottom: 18px; }
+    .auth-page .content { max-width: 440px; padding: 0; animation: rise .5s ease-out both; }
+
+    /* ============ Cards and layout ============ */
+    .card {
+      background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg);
+      padding: 22px 24px; box-shadow: var(--shadow); overflow-x: auto; animation: rise .45s ease-out both;
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card:hover { box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c-primary) 25%, var(--c-border)); }
+    .card + .card { margin-top: 18px; }
+    .grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 18px; margin-top: 18px; }
+    .grid-2 > .card + .card { margin-top: 0; }
+    .grid-2 > .card:nth-child(2) { animation-delay: .06s; }
+    .grid-2 > .card:nth-child(3) { animation-delay: .12s; }
+    ul.checks, .card ul { list-style: none; padding-left: 0; }
+
+    /* Stat tiles with a colored top edge */
+    .tiles { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0; }
+    .tile {
+      flex: 1 1 150px; min-width: 130px; padding: 16px 18px; border-radius: var(--radius-lg); position: relative; overflow: hidden;
+      background: var(--c-surface); border: 1px solid var(--c-border); box-shadow: var(--shadow-sm);
+      display: flex; flex-direction: column; transition: transform .25s ease, box-shadow .25s ease;
+      animation: rise .45s ease-out both;
+    }
+    .tile::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 4px; background: var(--brand-grad); }
+    .tile:nth-child(2)::before { background: linear-gradient(90deg, #06b6d4, #3b82f6); }
+    .tile:nth-child(3)::before { background: linear-gradient(90deg, #10b981, #06b6d4); }
+    .tile:nth-child(4)::before { background: linear-gradient(90deg, #f59e0b, #f97316); }
+    .tile:nth-child(5)::before { background: linear-gradient(90deg, #8b5cf6, #ec4899); }
+    .tile:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); }
+    .tile a { color: inherit; text-decoration: none; display: flex; flex-direction: column; }
+    .tile-value { font-size: 1.6em; font-weight: 800; letter-spacing: -.02em; }
+    .tile-label { color: var(--c-muted); font-size: .85em; }
+
+    /* ============ Tables ============ */
+    table { width: 100%; border-collapse: separate; border-spacing: 0; }
+    th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--c-border); vertical-align: top; }
+    th { font-size: .78em; color: var(--c-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .05em; background: var(--c-surface-2); }
+    th:first-child { border-top-left-radius: 10px; }
+    th:last-child { border-top-right-radius: 10px; }
+    table tbody tr { transition: background .15s ease; }
+    table tbody tr:hover { background: color-mix(in srgb, var(--c-primary) 6%, transparent); }
+
+    /* ============ Forms ============ */
+    input[type=text], input[type=email], input[type=password], input[type=number], input[type=date], input[type=search], select, textarea {
+      width: 100%; padding: 10px 12px; border: 1px solid var(--c-border); border-radius: 10px; font: inherit;
+      background: var(--c-input); color: var(--c-text); transition: border-color .2s, box-shadow .2s;
+    }
+    input:focus, select:focus, textarea:focus { outline: none; border-color: var(--c-primary); box-shadow: 0 0 0 4px color-mix(in srgb, var(--c-primary) 18%, transparent); }
+    input[type=checkbox] { accent-color: var(--c-primary); width: 16px; height: 16px; }
+    .filters input { width: auto; }
+    .list-bar input, .list-bar select { width: auto; }
+    .list-bar input[type=search] { min-width: 240px; }
+    .field { margin-bottom: 16px; }
+    .field label { display: block; font-weight: 600; margin-bottom: 6px; font-size: .95em; }
+    .help { color: var(--c-muted); font-size: .86em; margin: 6px 0 0; }
+    .help ul { margin: 4px 0 0 18px; padding: 0; }
+    .field-error, .errorlist { color: var(--c-danger); font-size: .9em; margin: 6px 0 0; }
+    .errorlist { padding-left: 18px; }
+    .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 10px; }
+
+    /* ============ Buttons ============ */
+    button, .button {
+      background: var(--btn-grad); color: #fff; border: 0; border-radius: 10px; padding: 9px 16px; font: inherit; font-weight: 600;
+      cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      box-shadow: 0 6px 16px rgba(79, 70, 229, .25); transition: transform .15s ease, box-shadow .2s ease, filter .2s ease;
+    }
+    button:hover, .button:hover { transform: translateY(-1px); box-shadow: 0 10px 22px rgba(79, 70, 229, .32); filter: brightness(1.05); }
+    button:active, .button:active { transform: scale(.97); }
+    button.secondary { background: var(--c-secondary); box-shadow: none; }
+    button.secondary:hover { background: var(--c-secondary-hover); box-shadow: none; }
+    button:focus-visible, .button:focus-visible, a:focus-visible, .preset:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-primary) 40%, transparent); outline-offset: 2px; }
+    .auth-page .card .actions button { width: 100%; }
+
+    /* Messages (shown as toasts) */
+    .messages { list-style: none; padding: 0; margin: 0 0 16px; }
+    .toasts {
+      position: fixed; right: 18px; bottom: 18px; z-index: 60; display: flex; flex-direction: column; gap: 10px;
+      max-width: min(380px, calc(100vw - 36px)); list-style: none; margin: 0; padding: 0;
+    }
+    .toast {
+      display: flex; gap: 12px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius-lg);
+      background: var(--c-surface); border: 1px solid var(--c-border); box-shadow: var(--shadow-lift);
+      border-left: 4px solid var(--c-success); animation: slide-in .35s ease-out both; transition: opacity .3s, transform .3s;
+    }
+    .toast.warning, .toast.error { border-left-color: var(--c-danger); }
+    .toast span { flex: 1; }
+    .toast button { background: none; color: var(--c-muted); padding: 0 4px; font-size: 1.15em; line-height: 1; box-shadow: none; }
+    .toast button:hover { background: none; color: var(--c-text); transform: none; box-shadow: none; }
+    .toast-hide { opacity: 0; transform: translateY(8px); }
+    @keyframes slide-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+
+    /* ============ Status and small components ============ */
+    .loading-bar { position: fixed; top: 0; left: 0; height: 3px; width: 100%; z-index: 70; opacity: 0;
+      background: linear-gradient(90deg, transparent, var(--c-primary), var(--c-accent), transparent); background-size: 50% 100%;
+      animation: slide 1s linear infinite; transition: opacity .2s; pointer-events: none; }
+    .htmx-request.loading-bar, .htmx-request .loading-bar { opacity: 1; }
+    @keyframes slide { from { background-position: -50% 0; } to { background-position: 150% 0; } }
+    .htmx-swapping { opacity: .6; transition: opacity .15s; }
+    .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+    .dot-online { background: var(--color-online); }
+    .dot-offline { background: var(--color-offline); }
+    .dot-revoked { background: var(--c-border); border: 1px solid var(--c-muted); box-sizing: border-box; }
+    .live-note { font-size: .86em; margin: 0; color: var(--c-muted); }
+    .pulse { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--color-online); margin-right: 6px; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 50% { opacity: .3; } }
+    .pulse-ring { position: relative; }
+    .pulse-ring::after { content: ""; position: absolute; inset: -4px; border-radius: 50%; border: 2px solid var(--color-online); opacity: 0; animation: ring 2s ease-out infinite; }
+    @keyframes ring { 0% { transform: scale(.6); opacity: .8; } 100% { transform: scale(1.7); opacity: 0; } }
+    .agent-line { margin: 4px 0 12px; font-size: 1.05em; }
+    .state-active { background: var(--color-online); }
+    .state-idle { background: var(--color-offline); }
+    .sync-status { margin: 4px 0 12px; font-size: .95em; }
+    .sync-status p { margin: 0; }
+    .code { font-family: ui-monospace, Consolas, monospace; font-size: 1.3em; letter-spacing: 2px; word-break: break-all; font-weight: 700; }
+    pre { background: var(--c-surface-2); border: 1px solid var(--c-border); border-radius: 10px; padding: 12px 14px; overflow-x: auto; white-space: pre-wrap; word-break: break-all; font-size: .86em; }
+    .details { display: grid; grid-template-columns: max-content 1fr; gap: 8px 18px; margin: 0; }
+    .details dt { color: var(--c-muted); }
+    .details dd { margin: 0; }
+
+    /* Presets (day / week) as pills */
+    .presets { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+    .preset {
+      padding: 6px 14px; border-radius: 999px; border: 1px solid var(--c-border); color: var(--c-muted); text-decoration: none;
+      font-size: .9em; background: var(--c-surface); transition: all .2s ease;
+    }
+    .preset:hover { color: var(--c-text); border-color: var(--c-primary); transform: translateY(-1px); }
+    .preset.active { background: var(--btn-grad); border-color: transparent; color: #fff; box-shadow: 0 6px 14px rgba(79, 70, 229, .3); }
+
+    /* Badges and category colors */
+    .badge { color: #fff; border-radius: 999px; padding: 3px 10px; font-size: .78em; font-weight: 600; white-space: nowrap; transition: transform .15s ease; display: inline-block; }
+    .badge:hover { transform: scale(1.06); }
+    .badge[class*="cat-"], .seg { color: #0b1020; }
+    .cat-productive { background: var(--cat-productive); }
+    .cat-unproductive { background: var(--cat-unproductive); }
+    .cat-neutral { background: var(--cat-neutral); }
+    .cat-neutral.badge, .seg.cat-neutral, .cat-unclassified.badge, .seg.cat-unclassified { color: #fff; }
+    .cat-unclassified { background: var(--cat-unclassified); }
+    .cat-mixed { background: var(--cat-mixed); }
+    .splitbar { display: flex; height: 30px; border-radius: 10px; overflow: hidden; margin: 10px 0; box-shadow: var(--shadow-sm); }
+    .seg { font-size: .8em; line-height: 30px; text-align: center; overflow: hidden; white-space: nowrap; font-weight: 600; }
+    .bar { display: inline-block; width: 130px; height: 8px; background: var(--c-border); border-radius: 999px; vertical-align: middle; margin-right: 8px; overflow: hidden; }
+    .bar span { display: block; height: 100%; background: var(--brand-grad); border-radius: 999px; transition: width .7s ease; }
+    .legend td { border: 0; padding: 3px 8px; }
+    .list-bar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0; }
+    .pager { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-top: 14px; }
+    .chart-box { position: relative; height: 290px; margin: 10px 0; animation: rise .5s ease-out both; }
+    .chart-table summary { cursor: pointer; color: var(--c-primary); font-size: .9em; margin-top: 6px; font-weight: 600; }
+    .table-wrap { overflow-x: auto; max-height: 340px; }
+    .chart-table td, .chart-table th { padding: 7px 9px; font-size: .88em; white-space: nowrap; }
+
+    /* ============ Layout helpers and confirmation dialog ============ */
+    .inline-form { display: inline; margin: 0; }
+    .form-gap { margin: 12px 0 0; }
+    button.danger { background: var(--c-danger); box-shadow: 0 6px 16px rgba(220, 38, 38, .25); }
+    button.danger:hover { background: #b91c1c; box-shadow: 0 10px 22px rgba(220, 38, 38, .32); }
+    .modal-backdrop {
+      position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px;
+      background: rgba(11, 16, 32, .45); backdrop-filter: blur(3px); animation: fade-in .2s ease-out both;
+    }
+    .modal {
+      width: min(440px, 100%); background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lift); padding: 22px 24px; animation: pop-in .22s ease-out both;
+    }
+    .modal h2 { margin-bottom: 6px; }
+    .modal .actions { justify-content: flex-end; margin-top: 18px; }
+    .modal .actions button.secondary { background: var(--c-secondary); }
+    @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes pop-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+    /* ============ Motion preferences ============ */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+    }
+
+    /* ============ Phones and small tablets ============ */
+    @media (max-width: 800px) {
+      .content { padding: 18px 14px 40px; }
+      .card { padding: 18px 16px; }
+      .grid-2 { grid-template-columns: 1fr; }
+      th, td { padding: 9px 7px; }
+      /* The People table keeps Name, Role and Status on a phone. Email and Department are still on the page. */
+      table.people th:nth-child(2), table.people td:nth-child(2),
+      table.people th:nth-child(4), table.people td:nth-child(4) { display: none; }
+    }
+
+    /* ============ Connection steps (device setup) ============ */
+    .stages { list-style: none; padding: 0; margin: 14px 0; display: grid; gap: 8px; }
+    .stages li { position: relative; padding: 8px 12px 8px 36px; border-radius: 10px; border: 1px solid var(--c-border); color: var(--c-muted); font-size: .92em; }
+    .stages li::before { content: ""; position: absolute; left: 13px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; border: 2px solid var(--c-border); box-sizing: border-box; }
+    .stages li.done { color: var(--c-text); }
+    .stages li.done::before { background: var(--c-success); border-color: var(--c-success); }
+    .stages li.current { color: var(--c-text); border-color: var(--c-accent); font-weight: 600; }
+    .stages li.current::before { border-color: var(--c-accent); background: var(--c-accent); }
+
+    /* ============ Page header and attention list ============ */
+    .page-header { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+    .page-header h1 { margin: 0 0 4px; }
+    .page-header p { margin: 0; }
+    ul.attention { list-style: none; padding: 0; margin: 0; display: grid; gap: 10px; }
+    ul.attention > li { padding: 10px 14px; border: 1px solid var(--c-border); border-radius: 10px; }
+    ul.attention ul { margin: 8px 0 0; padding-left: 18px; }
+
+    /* ============ Dashboard layout ============ */
+    .dash-hero { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: 18px; align-items: stretch; margin-bottom: 18px; }
+    .dash-hero > * { min-width: 0; }
+    .five-up .tiles { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 14px 0 0; }
+    .five-up .tiles .tile { flex: none; min-width: 0; padding: 14px 14px; }
+    .five-up .tiles .tile-value { font-size: 1.35em; }
+    @media (max-width: 900px) { .five-up .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    .dash-hero > div { display: flex; flex-direction: column; }
+    .dash-hero > div > .card { flex: 1 1 auto; }
+    .dash-hero .card + .card { margin-top: 18px; }
+    .dash-account { display: flex; flex-direction: column; gap: 14px; }
+    .dash-account .identity { display: flex; align-items: center; gap: 14px; min-width: 0; }
+    .dash-account .identity .avatar { width: 52px; height: 52px; font-size: 1.15em; }
+    .dash-account .identity strong { display: block; font-size: 1.1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .dash-account .identity div span { display: block; color: var(--c-muted); font-size: .9em; overflow-wrap: anywhere; }
+    .dash-account .details { grid-template-columns: max-content minmax(0, 1fr); }
+    .dash-account .details dd { overflow-wrap: anywhere; }
+    .section-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+    .section-title h2 { margin: 0; }
+    .badge-muted { background: var(--c-surface-2); color: var(--c-muted); border: 1px solid var(--c-border); }
+    /* Status pills, shared by pages and cards */
+    .status { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .78em; font-weight: 700; white-space: nowrap; }
+    .status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    .status.ok { color: var(--c-success); background: var(--c-success-bg); }
+    .status.wait { color: #b45309; background: #fef3c7; }
+    .status.bad { color: var(--c-danger); background: var(--c-danger-bg); }
+    :root[data-theme="dark"] .status.wait { color: #fbbf24; background: #3a2a0c; }
+    /* PC connection card */
+    .pc-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+    .pc-card-head h2 { margin: 0 0 2px; }
+    .pc-card-head p { margin: 0; font-size: .92em; }
+    .pc-card p { margin: 10px 0 0; }
+    .pc-card .pc-action { margin-top: 14px; display: grid; gap: 8px; max-width: 420px; }
+    .pc-card .pc-action h3 { margin: 4px 0 0; }
+    .pc-card .pc-action button { justify-self: start; }
+    .pc-approve { border-left: 4px solid #f59e0b; }
+    @media (max-width: 900px) {
+      .dash-hero { grid-template-columns: minmax(0, 1fr); }
+    }
+  </style>
+</head>
+<body hx-headers='{"X-CSRFToken": "{{ csrf_token }}"}'>
+  <div id="loading" class="loading-bar" aria-hidden="true"></div>
+  {% if user.is_authenticated %}
+  {% with current=request.resolver_match.url_name %}
+  <svg class="sprite" aria-hidden="true" focusable="false">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+    <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="M21 17l-5-5-9 9"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18 13.5a6.5 6.5 0 0 1 3.5 6.5"/></symbol>
+    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M3 8a2 2 0 0 1 2-2h2.5L9 4h6l1.5 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="3.5"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-team" viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.5"/><circle cx="5.5" cy="18" r="2.5"/><circle cx="18.5" cy="18" r="2.5"/><path d="M12 7.5v3.5M12 11l-4.5 4.5M12 11l4.5 4.5"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="1.5"/><path d="M9 7h2M13 7h2M9 11h2M13 11h2M10 21v-4h4v4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.2"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .9-1 1.7M12 17h.01"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M4 20h16"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
+    <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  </svg>
+  <div class="app" id="app">
+    <aside class="sidebar" aria-label="Main navigation">
+      <div class="sidebar-head">
+        <a class="brand" href="{% url 'home' %}">
+          <span class="brand-mark" aria-hidden="true">EM</span>
+          <span class="brand-text">Employee<br>Monitoring</span>
+        </a>
+      </div>
+      <nav class="sidebar-nav" aria-label="Sections">
+        <details class="nav-group" open>
+          <summary><span>Overview</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'dashboard' %}"{% if current == 'dashboard' or current == 'dashboard_me' or current == 'dashboard_employee' or current == 'dashboard_teams' or current == 'dashboard_team' or current == 'dashboard_organization' or current == 'dashboard_platform' %} aria-current="page"{% endif %} title="Dashboard"><svg class="i" aria-hidden="true"><use href="#i-grid"/></svg><span class="nav-label">Dashboard</span></a></li>
+          </ul>
+        </details>
+        {% if user.role == "admin" %}
+        <details class="nav-group" open>
+          <summary><span>Workforce</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'person_list' %}"{% if current == 'person_list' or current == 'person_create' or current == 'person_detail' %} aria-current="page"{% endif %} title="People"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">People</span></a></li>
+            <li><a href="{% url 'team_list' %}"{% if current == 'team_list' or current == 'team_create' or current == 'team_edit' %} aria-current="page"{% endif %} title="Teams"><svg class="i" aria-hidden="true"><use href="#i-team"/></svg><span class="nav-label">Teams</span></a></li>
+            <li><a href="{% url 'department_list' %}"{% if current == 'department_list' %} aria-current="page"{% endif %} title="Departments"><svg class="i" aria-hidden="true"><use href="#i-building"/></svg><span class="nav-label">Departments</span></a></li>
+          </ul>
+        </details>
+        <details class="nav-group" open>
+          <summary><span>Monitoring</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'screenshot_list' %}"{% if current == 'screenshot_list' or current == 'screenshot_detail' %} aria-current="page"{% endif %} title="Screenshots"><svg class="i" aria-hidden="true"><use href="#i-image"/></svg><span class="nav-label">Screenshots</span></a></li>
+            <li><a href="{% url 'rule_list' %}"{% if current == 'rule_list' or current == 'rule_change' %} aria-current="page"{% endif %} title="Rules"><svg class="i" aria-hidden="true"><use href="#i-tag"/></svg><span class="nav-label">Rules</span></a></li>
+            <li><a href="{% url 'unclassified_list' %}"{% if current == 'unclassified_list' %} aria-current="page"{% endif %} title="Unclassified"><svg class="i" aria-hidden="true"><use href="#i-help"/></svg><span class="nav-label">Unclassified</span></a></li>
+          </ul>
+        </details>
+        <details class="nav-group" open>
+          <summary><span>Setup</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'deployment' %}"{% if current == 'deployment' %} aria-current="page"{% endif %} title="Deployment"><svg class="i" aria-hidden="true"><use href="#i-download"/></svg><span class="nav-label">Deployment</span></a></li>
+            <li><a href="{% url 'policy_settings' %}"{% if current == 'policy_settings' %} aria-current="page"{% endif %} title="Monitoring settings"><svg class="i" aria-hidden="true"><use href="#i-sliders"/></svg><span class="nav-label">Monitoring settings</span></a></li>
+            <li><a href="{% url 'screenshot_settings' %}"{% if current == 'screenshot_settings' or current == 'screenshot_exclusions' %} aria-current="page"{% endif %} title="Screenshot settings"><svg class="i" aria-hidden="true"><use href="#i-camera"/></svg><span class="nav-label">Screenshot settings</span></a></li>
+          </ul>
+        </details>
+        <details class="nav-group" open>
+          <summary><span>Compliance</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'audit_log_list' %}"{% if current == 'audit_log_list' %} aria-current="page"{% endif %} title="Audit logs"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span class="nav-label">Audit logs</span></a></li>
+          </ul>
+        </details>
+        {% elif user.role == "manager" %}
+        <details class="nav-group" open>
+          <summary><span>Monitoring</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'screenshot_list' %}"{% if current == 'screenshot_list' or current == 'screenshot_detail' %} aria-current="page"{% endif %} title="Screenshots"><svg class="i" aria-hidden="true"><use href="#i-image"/></svg><span class="nav-label">Screenshots</span></a></li>
+          </ul>
+        </details>
+        {% elif user.role == "super_admin" %}
+        <details class="nav-group" open>
+          <summary><span>Platform</span></summary>
+          <ul class="nav-links">
+            <li><a href="{% url 'organization_list' %}"{% if current == 'organization_list' or current == 'organization_create' or current == 'organization_admin_create' %} aria-current="page"{% endif %} title="Organizations"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span class="nav-label">Organizations</span></a></li>
+            <li><a href="{% url 'audit_log_list' %}"{% if current == 'audit_log_list' %} aria-current="page"{% endif %} title="Audit logs"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span class="nav-label">Audit logs</span></a></li>
+          </ul>
+        </details>
+        {% endif %}
+      </nav>
+      <a class="sidebar-user" href="{% url 'profile' %}" title="Your profile">
+        <span class="avatar" aria-hidden="true">{{ user.email|slice:":1" }}</span>
+        <span class="who">
+          <span class="email">{{ user.email }}</span>
+          <span class="role-pill">{{ user.get_role_display }}</span>
+        </span>
+      </a>
+    </aside>
+    <div class="scrim" data-close-nav></div>
+    <div class="app-main">
+      <header class="topbar">
+        <button type="button" class="icon-btn menu-btn" aria-controls="app" aria-expanded="false" aria-label="Open menu"><svg class="i" aria-hidden="true"><use href="#i-menu"/></svg></button>
+        <button type="button" class="icon-btn sidebar-toggle" aria-expanded="true" aria-label="Collapse sidebar" title="Collapse sidebar"><svg class="i" aria-hidden="true"><use href="#i-panel"/></svg></button>
+        <p class="crumb" id="crumb">{% block crumb %}{% endblock %}</p>
+        <div class="spacer"></div>
+        <button type="button" class="icon-btn theme-toggle" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i i-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="i i-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+        <details class="profile-menu">
+          <summary aria-label="Account menu"><span class="avatar" aria-hidden="true">{{ user.email|slice:":1" }}</span><span class="profile-email">{{ user.email }}</span></summary>
+          <div class="menu-pop">
+            <a href="{% url 'profile' %}">Your profile</a>
+            <a href="{% url 'password_change' %}">Change password</a>
+            <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Log out</button></form>
+          </div>
+        </details>
+      </header>
+      {% endwith %}
+  {% else %}
+  <div class="auth-page">
+    <button type="button" class="icon-btn theme-toggle auth-theme" data-theme-toggle aria-label="Switch to dark mode" title="Switch to dark mode"><svg class="i i-moon" aria-hidden="true"><use href="#i-moon"/></svg><svg class="i i-sun" aria-hidden="true"><use href="#i-sun"/></svg></button>
+    <a class="brand auth-brand" href="{% url 'home' %}">
+      <span class="brand-mark" aria-hidden="true">EM</span>
+      <span>Employee Monitoring</span>
+    </a>
+  {% endif %}
+      <main class="content" id="main">
+        {% if messages %}
+          <ul class="toasts" role="status" aria-live="polite">
+            {% for message in messages %}<li class="toast {{ message.tags }}"><span>{{ message }}</span><button type="button" aria-label="Close message">&times;</button></li>{% endfor %}
+          </ul>
+        {% endif %}
+        <nav class="crumbs" aria-label="Breadcrumb">{% block crumbs %}{% endblock %}</nav>
+        {% block content %}{% endblock %}
+      </main>
+  {% if user.is_authenticated %}
+  </div>
+  </div>
+  {% else %}
+  </div>
+  {% endif %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/1.9.12/htmx.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <script src="{% static 'js/app.js' %}"></script>
+  {% if user.is_authenticated %}
+  <script src="{% static 'js/shell.js' %}"></script>
+  {% endif %}
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Callable, Mapping
 from urllib.parse import urljoin, urlparse
 
@@ -16,10 +17,25 @@ import requests
 
 
 class HttpError(Exception):
-    def __init__(self, status: int | None, code: str) -> None:
+    def __init__(self, status: int | None, code: str, detail: str = "") -> None:
         super().__init__(f"HTTP error: status={status} code={code}")
         self.status = status
         self.code = code
+        # A short, safe reason for the log (for example why a certificate was refused). Never a URL or a token.
+        self.detail = detail
+
+    def for_log(self) -> str:
+        return f"{self.code}: {self.detail}" if self.detail else self.code
+
+
+# "certificate verify failed: <reason> (_ssl.c:1082)" -> "<reason>". Only this fixed part of an SSL error is kept.
+_TLS_REASON = re.compile(r"certificate verify failed: ([A-Za-z0-9 ,'_-]{1,80})")
+
+
+def _safe_detail(exc: Exception) -> str:
+    """Why a TLS check failed, without the URL or host from the exception text."""
+    match = _TLS_REASON.search(str(exc))
+    return f"certificate verify failed: {match.group(1).strip()}" if match else ""
 
 
 class AuthError(HttpError):
@@ -56,35 +72,40 @@ class HttpClient:
     def post_json(self, path: str, body: Mapping[str, Any], auth: bool = True) -> dict[str, Any]:
         return self._request("POST", path, body, auth)
 
-    def get_json(self, path: str, auth: bool = True) -> dict[str, Any]:
-        return self._request("GET", path, None, auth)
+    def get_json(self, path: str, auth: bool = True, bearer: str | None = None) -> dict[str, Any]:
+        return self._request("GET", path, None, auth, bearer)
 
     def put_absolute(self, url: str, data: bytes, headers: Mapping[str, str]) -> None:
         """Direct upload to a pre-signed S3 URL. The URL is never logged or stored."""
         if urlparse(url).scheme != "https":
             raise PermanentError(None, "upload_url_not_https")
         try:
-            resp = self._session.request("PUT", url, data=data, headers=dict(headers), timeout=self._timeout, verify=self._verify)
+            resp = self._session.request("PUT", url, data=data, headers=dict(headers), timeout=self._timeout, verify=self._verify, allow_redirects=False)
         except requests.RequestException as exc:
-            raise TransientError(None, type(exc).__name__) from None
+            raise TransientError(None, type(exc).__name__, _safe_detail(exc)) from None
         if resp.status_code >= 500 or resp.status_code == 429:
             raise TransientError(resp.status_code, "upload_failed")
         if resp.status_code >= 400:
             raise PermanentError(resp.status_code, "upload_rejected")
 
-    def _request(self, method: str, path: str, body: Mapping[str, Any] | None, auth: bool) -> dict[str, Any]:
+    def _request(
+        self, method: str, path: str, body: Mapping[str, Any] | None, auth: bool, bearer: str | None = None
+    ) -> dict[str, Any]:
         headers = {"Accept": "application/json"}
         if auth:
             token = self._token_provider()
             if not token:
                 raise AuthError(None, "not_registered")
             headers["Authorization"] = f"Bearer {token}"
+        elif bearer:
+            # A secret the server gave this PC for one request, such as a pairing poll token.
+            headers["Authorization"] = f"Bearer {bearer}"
         url = urljoin(self._base, path.lstrip("/"))
         try:
-            resp = self._session.request(method, url, json=body, headers=headers, timeout=self._timeout, verify=self._verify)
+            resp = self._session.request(method, url, json=body, headers=headers, timeout=self._timeout, verify=self._verify, allow_redirects=False)
         except requests.RequestException as exc:
-            # Log only the exception class. Messages can contain URLs.
-            raise TransientError(None, type(exc).__name__) from None
+            # Log only the exception class, plus the fixed reason of a certificate failure. Messages can contain URLs.
+            raise TransientError(None, type(exc).__name__, _safe_detail(exc)) from None
         return self._parse(resp)
 
     @staticmethod

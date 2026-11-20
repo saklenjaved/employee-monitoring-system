@@ -1,0 +1,36 @@
+{# The overview cards on the Admin dashboard. Refreshed every 10 seconds (analytics.dashboards.organization_live). #}
+<div class="kpi-row">
+  <article class="kpi">
+    <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+    <div>
+      <p class="kpi-label">Total employees</p>
+      <p class="kpi-value">{{ live.employee_count }}</p>
+      <p class="kpi-context">{{ live.inactive_count }} inactive</p>
+    </div>
+  </article>
+  <article class="kpi">
+    <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><polyline points="17 11 19 13 23 9"/></svg></span>
+    <div>
+      <p class="kpi-label">Active devices</p>
+      <p class="kpi-value">{{ live.agents.online }}</p>
+      <p class="kpi-context">of {{ live.registered_count }} registered PCs</p>
+    </div>
+  </article>
+  <article class="kpi">
+    <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+    <div>
+      <p class="kpi-label">Monitoring active</p>
+      <p class="kpi-value">{{ live.monitoring_active_count }}</p>
+      <p class="kpi-context">of {{ live.active_count }} active employees</p>
+    </div>
+  </article>
+  <article class="kpi{% if live.attention_count %} kpi-attn{% endif %}">
+    <span class="kpi-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+    <div>
+      <p class="kpi-label">Attention required</p>
+      <p class="kpi-value">{{ live.attention_count }}</p>
+      <p class="kpi-context">Approvals, offline devices and sign-ins</p>
+    </div>
+  </article>
+</div>
+{% load tz %}{% timezone zone %}<p class="muted live-note"><span class="pulse" aria-hidden="true"></span> Live. Updated {{ live.checked_at|time:"H:i:s" }} {{ zone_label }}.</p>{% endtimezone %}

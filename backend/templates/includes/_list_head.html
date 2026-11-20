@@ -1,0 +1,5 @@
+<tr hx-boost="true" hx-target="#main" hx-select="#main" hx-swap="outerHTML" hx-push-url="true">
+  {% for column in listing.columns %}
+    <th>{% if column.link %}<a href="?{{ column.link }}">{{ column.label }} {{ column.arrow }}</a>{% else %}{{ column.label }}{% endif %}</th>
+  {% endfor %}
+</tr>

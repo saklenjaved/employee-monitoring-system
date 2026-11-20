@@ -1,0 +1,662 @@
+{% extends "base.html" %}
+{% load analytics_extras tz %}
+{% block title %}Organization dashboard{% endblock %}
+{% block content %}
+{% timezone zone %}
+<style>
+  /* Admin dashboard. Uses the design tokens from base.html. Classes here are used only on this page. */
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  [hidden] { display: none !important; }
+
+  /* Page header */
+  .dash-head { display: flex; flex-wrap: wrap; gap: 14px 20px; align-items: flex-end; justify-content: space-between; }
+  .dash-head h1 { margin: 0 0 4px; }
+  .dash-head .muted { margin: 0; }
+  .range-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+  .range-bar select, .range-bar input[type=date] { width: auto; min-width: 0; height: 38px; box-sizing: border-box; padding: 0 12px; font-size: .92em; }
+  .range-custom { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  /* Header buttons share one size: Apply, Refresh and the Attention link. */
+  .dash-head .range-bar > button, .dash-head .range-bar > .notif, .dash-head .range-apply { min-width: 104px; height: 38px; box-sizing: border-box; padding: 0 16px; font-size: .92em; line-height: 1; display: inline-flex; align-items: center; justify-content: center; margin: 0; }
+  .notif { gap: 8px; border: 1px solid #f59e0b; border-radius: 8px; color: var(--c-text); text-decoration: none; background: var(--c-surface); }
+  .notif:hover, .notif:focus-visible { outline: none; border-color: var(--c-primary); }
+  .notif-count { min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; display: inline-grid; place-items: center; background: #f59e0b; color: #fff; font-size: .8em; font-weight: 700; }
+
+  /* Sections and rows. Cards in one row stretch to the same height. */
+  .section { margin-top: 24px; }
+  .section-title { margin: 0 0 12px; font-size: 1.05em; }
+  .row { display: grid; gap: 18px; align-items: stretch; }
+  .row-chart { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .row-three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .row-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .grid-2 { display: grid; gap: 18px; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+  .row > .card, .grid-2 > .card { margin: 0; min-width: 0; display: flex; flex-direction: column; }
+  .card-body { flex: 1; min-width: 0; }
+  /* Long lists scroll inside their card, so every card in the row keeps the same height. */
+  .scroll-y { max-height: 340px; overflow-y: auto; padding-right: 4px; scrollbar-width: thin; }
+  @media (max-width: 1100px) {
+    .row-chart { grid-template-columns: minmax(0, 1fr); }
+    .row-three { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .row-three > .card:last-child { grid-column: 1 / -1; }
+    .row-two { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 720px) {
+    .row-three { grid-template-columns: minmax(0, 1fr); }
+    .row-three > .card:last-child { grid-column: auto; }
+    .scroll-y { max-height: none; overflow: visible; }
+  }
+
+  /* Card header: title, one short line, optional actions */
+  .card-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; margin-bottom: 14px; }
+  .card-head h2 { margin: 0; font-size: 1.02em; }
+  .card-head p { margin: 2px 0 0; color: var(--c-muted); font-size: .85em; }
+  .card-head a { font-size: .88em; white-space: nowrap; }
+  .card-actions { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .card-actions a { padding: 6px 12px; border: 1px solid var(--c-border); border-radius: 8px; color: var(--c-text); text-decoration: none; font-size: .88em; background: var(--c-surface); white-space: nowrap; }
+  .card-actions a:hover, .card-actions a:focus-visible { border-color: var(--c-primary); outline: none; }
+  .card-actions a.primary { background: var(--c-primary-solid); border-color: var(--c-primary-solid); color: #fff; }
+
+  /* KPI cards (rendered by analytics/_live.html) */
+  .kpi-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  @media (min-width: 900px) { .kpi-row { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .kpi { display: flex; gap: 12px; align-items: flex-start; padding: 16px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; min-width: 0; }
+  .kpi > div { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .kpi-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface)); color: var(--c-primary); }
+  .kpi-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .kpi-label { margin: 0; color: var(--c-muted); font-size: .85em; }
+  .kpi-value { margin: 2px 0; font-size: 1.6em; font-weight: 700; letter-spacing: -.01em; overflow-wrap: anywhere; }
+  .kpi-context { margin: auto 0 0; color: var(--c-muted); font-size: .83em; }
+  .kpi-attn { border-color: #f59e0b; }
+  .kpi-attn .kpi-icon { background: color-mix(in srgb, #f59e0b 16%, var(--c-surface)); color: var(--c-warn); }
+  @media (max-width: 600px) { .kpi-value { font-size: 1.4em; } }
+
+  /* Needs attention: one compact bar; the list opens on demand */
+  .attn-details { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; }
+  .attn-details[open] { padding-bottom: 14px; }
+  .attn-summary { display: flex; align-items: center; gap: 12px; padding: 12px 16px; cursor: pointer; list-style: none; }
+  .attn-summary::-webkit-details-marker { display: none; }
+  .attn-title { font-weight: 700; font-size: 1.02em; }
+  .attn-count { padding: 2px 10px; border-radius: 999px; font-size: .82em; font-weight: 700; background: var(--c-bg); color: var(--c-muted); white-space: nowrap; }
+  .attn-count.has { background: color-mix(in srgb, #f59e0b 16%, var(--c-surface)); color: var(--c-warn); }
+  .attn-toggle { margin-left: auto; color: var(--c-primary); font-size: .88em; font-weight: 600; white-space: nowrap; }
+  .attn-toggle::after { content: " ▾"; }
+  .attn-details[open] .attn-toggle::after { content: " ▴"; }
+  .attn-details .attn-list, .attn-details .allclear { margin: 0 14px; }
+  /* Attention list */
+  .attn-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .attn-list li { display: flex; justify-content: space-between; gap: 12px; align-items: center; padding: 10px 14px; border-radius: 10px; border-left: 3px solid var(--c-warn); background: var(--c-surface); border-top: 1px solid var(--c-border); border-right: 1px solid var(--c-border); border-bottom: 1px solid var(--c-border); font-size: .93em; }
+  .attn-list li.bad { border-left-color: var(--c-danger); }
+  .attn-list li.info { border-left-color: var(--c-info); }
+  .attn-list a.go { flex: none; white-space: nowrap; font-weight: 600; }
+  .allclear { margin: 0; padding: 12px 14px; border-radius: 10px; background: var(--c-surface); border: 1px solid var(--c-border); border-left: 3px solid var(--color-online); font-size: .93em; }
+
+  /* Lists */
+  .list-plain { list-style: none; margin: 0; padding: 0; }
+  .list-plain li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--c-border); font-size: .93em; }
+  .list-plain li:first-child { border-top: 0; padding-top: 0; }
+  .list-plain .when { color: var(--c-muted); white-space: nowrap; font-size: .88em; }
+
+  /* Live activity rows */
+  .act-list { list-style: none; margin: 0; padding: 0; }
+  .act-row { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0 10px 16px; border-top: 1px solid var(--c-border); font-size: .93em; }
+  .act-row:first-child { border-top: 0; padding-top: 0; }
+  .act-row::before { content: ""; position: absolute; left: 2px; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--c-primary); }
+  .act-row.act-website::before { background: var(--c-teal); }
+  .act-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .act-meta { flex: none; color: var(--c-muted); font-size: .85em; white-space: nowrap; }
+
+  /* Ranked rows: applications and websites */
+  .rank-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .rank-row { display: grid; grid-template-columns: 22px 30px minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
+  .rank-num { color: var(--c-muted); font-size: .85em; font-weight: 600; text-align: center; }
+  .rank-icon { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: color-mix(in srgb, var(--c-primary) 14%, var(--c-surface)); color: var(--c-primary); font-weight: 700; font-size: .85em; text-transform: uppercase; }
+  .rank-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; font-size: .93em; }
+  .rank-meta { display: block; font-weight: 400; color: var(--c-muted); font-size: .82em; }
+  .rank-value { text-align: right; font-variant-numeric: tabular-nums; font-size: .9em; white-space: nowrap; }
+  .rank-bar { grid-column: 3 / -1; height: 6px; border-radius: 999px; background: var(--c-bg); overflow: hidden; }
+  .rank-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--c-primary); }
+
+  /* Team performance rows */
+  .team-table { width: 100%; border-collapse: collapse; }
+  .team-table th { text-align: left; font-size: .76em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--c-border); white-space: nowrap; position: sticky; top: 0; background: var(--c-surface); }
+  .team-table td { padding: 10px; border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: .92em; }
+  .team-table tr:last-child td { border-bottom: 0; }
+  .team-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .team-table .team-name a { font-weight: 600; }
+  .prog { display: flex; align-items: center; gap: 10px; min-width: 120px; }
+  .prog-track { flex: 1; height: 6px; border-radius: 999px; background: var(--c-bg); overflow: hidden; }
+  .prog-track > span { display: block; height: 100%; border-radius: inherit; background: var(--color-online); }
+  .mon-dot { display: inline-flex; align-items: center; gap: 6px; }
+  .mon-dot::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .mon-dot.full { color: var(--c-success-text); }
+  .mon-dot.some { color: var(--c-warn); }
+  .mon-dot.none { color: var(--c-danger); }
+
+  /* Device status */
+  .donut-wrap { display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+  .donut { position: relative; width: 150px; height: 150px; border-radius: 50%; flex: none; display: grid; place-items: center; margin: 0 auto; }
+  .donut::after { content: ""; position: absolute; inset: 22%; border-radius: 50%; background: var(--c-surface); }
+  .donut span { position: relative; z-index: 1; display: grid; text-align: center; line-height: 1.1; }
+  .donut strong { font-size: 1.5em; }
+  .donut small { color: var(--c-muted); }
+  .donut-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; min-width: 150px; flex: 1 1 160px; }
+  .donut-legend li { display: flex; align-items: center; gap: 8px; font-size: .92em; }
+  .donut-legend strong { margin-left: auto; }
+  .swatch { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+
+  /* Charts */
+  .chart-small { position: relative; height: 240px; }
+  .chart-empty { margin: 8px 0 0; }
+
+  /* System status bar */
+  .status-bar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--c-border); background: var(--c-surface); font-size: .93em; }
+  .status-bar.ok { border-left: 3px solid var(--color-online); }
+  .status-bar.warn { border-left: 3px solid var(--c-warn); }
+  .status-bar .meta { color: var(--c-muted); font-size: .9em; }
+
+  /* Employees table */
+  .emp-scroll { overflow-x: auto; }
+  .live-table { width: 100%; min-width: 960px; border-collapse: collapse; }
+  .live-table th { text-align: left; font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--c-border); background: var(--c-bg); white-space: nowrap; vertical-align: middle; }
+  .live-table td { padding: 12px 14px; border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: .92em; white-space: nowrap; }
+  .live-table tbody tr:last-child td { border-bottom: 0; }
+  .live-table .live-name a { font-weight: 600; }
+  .live-table .live-num { text-align: right; font-variant-numeric: tabular-nums; }
+  .live-agent { display: inline-flex; align-items: center; gap: 6px; }
+  .live-window { display: inline-block; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: middle; }
+
+  /* Monitoring status tables */
+  .ms-table { width: 100%; border-collapse: collapse; }
+  .ms-table th { text-align: left; font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--c-border); background: var(--c-bg); white-space: nowrap; position: sticky; top: 0; }
+  .ms-table td { padding: 10px 14px; border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: .92em; }
+  .ms-table tr:last-child td { border-bottom: 0; }
+  .ms-scroll { max-height: 380px; overflow: auto; }
+  .ms-muted { color: var(--c-muted); }
+  .ms-num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .ms-empty { margin: 0; color: var(--c-muted); }
+  .ms-pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .82em; font-weight: 600; white-space: nowrap; }
+  .ms-pill::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .ms-pill.active { background: color-mix(in srgb, #059669 14%, var(--c-surface)); color: var(--c-success-text); }
+  .ms-pill.paused { background: color-mix(in srgb, #d97706 14%, var(--c-surface)); color: var(--c-warn); }
+  .ms-pill.inactive { background: var(--c-bg); color: var(--c-muted); }
+  .ms-flag { display: inline-flex; padding: 2px 8px; border-radius: 6px; font-size: .78em; font-weight: 600; background: color-mix(in srgb, #dc2626 12%, var(--c-surface)); color: var(--c-danger); margin-left: 8px; white-space: nowrap; }
+  .ms-head { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+  .ms-count { font-size: .9em; color: var(--c-muted); margin: 0; }
+  .ms-count strong { color: var(--c-text); font-size: 1.2em; }
+
+  /* Plain tables (departments) */
+  .plain-table { width: 100%; border-collapse: collapse; }
+  .plain-table th { text-align: left; font-size: .78em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--c-border); }
+  .plain-table td { padding: 9px 10px; border-bottom: 1px solid var(--c-border); font-size: .92em; }
+  .plain-table tr:last-child td { border-bottom: 0; }
+  .plain-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* Recent activity feed */
+  .ra-list { list-style: none; margin: 0; padding: 0; }
+  .ra-item { display: flex; gap: 12px; padding: 12px 0; border-top: 1px solid var(--c-border); }
+  .ra-item:first-child { border-top: 0; padding-top: 0; }
+  .ra-icon { flex: none; width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; background: var(--c-bg); color: var(--c-muted); }
+  .ra-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .ra-icon.ra-success, .ra-icon.ra-active { color: var(--c-success-text); }
+  .ra-icon.ra-pending { color: var(--c-warn); }
+  .ra-icon.ra-warning { color: var(--c-danger); }
+  .ra-icon.ra-info { color: var(--c-info); }
+  .ra-body { min-width: 0; flex: 1; }
+  .ra-text { margin: 0; font-size: .93em; overflow-wrap: anywhere; }
+  .ra-meta { margin: 3px 0 0; font-size: .82em; color: var(--c-muted); display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+  .ra-badge { padding: 1px 8px; border-radius: 999px; font-weight: 600; background: var(--c-bg); color: var(--c-muted); }
+  .ra-badge.ra-success, .ra-badge.ra-active { background: color-mix(in srgb, #059669 14%, var(--c-surface)); color: var(--c-success-text); }
+  .ra-badge.ra-pending { background: color-mix(in srgb, #d97706 14%, var(--c-surface)); color: var(--c-warn); }
+  .ra-badge.ra-warning { background: color-mix(in srgb, #dc2626 12%, var(--c-surface)); color: var(--c-danger); }
+  .ra-badge.ra-info { color: var(--c-info); }
+  .ra-area { flex: 1; display: flex; flex-direction: column; }
+  .ra-list { flex: 1; }
+  .ra-empty { flex: 1; display: grid; place-items: center; text-align: center; padding: 16px; }
+  .ra-empty p { margin: 0; max-width: 320px; }
+  .ra-pager { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between; padding-top: 12px; margin-top: auto; border-top: 1px solid var(--c-border); font-size: .9em; }
+  .ra-pager a, .ra-pager .ra-disabled, .ra-pager .ra-current, .ra-pager .ra-gap { display: inline-grid; place-items: center; min-width: 32px; height: 32px; padding: 0 8px; border-radius: 8px; box-sizing: border-box; }
+  .ra-pager a { border: 1px solid var(--c-border); color: var(--c-text); text-decoration: none; background: var(--c-surface); }
+  .ra-pager a:hover, .ra-pager a:focus-visible { border-color: var(--c-primary); outline: none; }
+  .ra-pager .ra-disabled { color: var(--c-muted); opacity: .6; }
+  .ra-pager .ra-current { background: var(--c-primary-solid); color: #fff; font-weight: 600; }
+  .ra-pager .ra-gap { color: var(--c-muted); }
+  .ra-numbers { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+
+  /* Monitoring settings tiles */
+  .settings-tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .settings-tiles .tile-sub { display: block; color: var(--c-muted); font-size: .8em; margin-top: 4px; }
+
+  @media (max-width: 600px) {
+    .range-bar { width: 100%; justify-content: stretch; }
+    .range-bar select { flex: 1 1 140px; }
+    .range-bar .range-apply { flex: 0 0 auto; }
+    .range-custom { width: 100%; }
+    .chart-small { height: 200px; }
+    .card-actions { justify-content: flex-start; }
+  }
+</style>
+
+<header class="dash-head">
+  <div>
+    <h1>Welcome back, {{ user.full_name|default:user.email }}</h1>
+    <p class="muted">{{ user.organization.name }} · {% if start == end %}{{ start|date:"j M Y" }}{% else %}{{ start|date:"j M Y" }} to {{ end|date:"j M Y" }}{% endif %}</p>
+  </div>
+  <div class="range-bar">
+    <form method="get" class="range-bar" data-range-form aria-label="Date range">
+      <label class="sr-only" for="range-preset">Period</label>
+      <select id="range-preset" name="preset">
+        <option value="day"{% if range_choice == 'day' %} selected{% endif %}>Today</option>
+        <option value="week"{% if range_choice == 'week' %} selected{% endif %}>Last 7 days</option>
+        <option value="month"{% if range_choice == 'month' %} selected{% endif %}>Last 30 days</option>
+        <option value="custom"{% if range_choice == 'custom' %} selected{% endif %}>Custom range</option>
+      </select>
+      <span class="range-custom" data-range-custom{% if range_choice != 'custom' %} hidden{% endif %}>
+        <label class="sr-only" for="{{ form.start.id_for_label }}">From</label>{{ form.start }}
+        <span class="muted" aria-hidden="true">to</span>
+        <label class="sr-only" for="{{ form.end.id_for_label }}">To</label>{{ form.end }}
+      </span>
+      <button type="submit" class="secondary range-apply">Apply</button>
+    </form>
+    {% if live.attention_count %}
+      <a class="notif" href="#attention-title" aria-label="{{ live.attention_count }} items need attention">
+        <span aria-hidden="true">Attention</span><span class="notif-count">{{ live.attention_count }}</span>
+      </a>
+    {% endif %}
+    <button type="button" class="secondary" onclick="location.reload()">Refresh</button>
+  </div>
+</header>
+
+<section class="section" aria-label="Key numbers" id="live-panel" hx-get="{% url 'dashboard_live' %}" hx-trigger="every 10s" hx-swap="innerHTML">
+  {% include "analytics/_live.html" %}
+</section>
+
+<section class="section attn" aria-label="Needs attention">
+  <details class="attn-details">
+    <summary class="attn-summary">
+      <span class="attn-title" id="attention-title">Needs attention</span>
+      <span class="attn-count{% if live.attention_count %} has{% endif %}">{% if live.attention_count %}{{ live.attention_count }} open{% else %}All clear{% endif %}</span>
+      <span class="attn-toggle">View details</span>
+    </summary>
+  {% with pending=live.pending_approvals not_signed=live.not_signed_in_count offline=command.devices.offline %}
+  {% if pending or not_signed or offline or to_connect.count or command.devices.with_errors or report.unclassified_count %}
+  <ul class="attn-list">
+    {% if pending %}
+      <li><span>{{ pending }} PC{{ pending|pluralize }} waiting for an employee to approve.</span><a class="go" href="{% url 'deployment' %}?connection=pairing_pending#employees">Show PCs</a></li>
+    {% endif %}
+    {% if not_signed %}
+      <li><span>{{ not_signed }} employee{{ not_signed|pluralize }} {{ not_signed|pluralize:"has,have" }} not signed in yet (invitation pending).</span><a class="go" href="{% url 'person_list' %}">Open Employees</a></li>
+    {% endif %}
+    {% if to_connect.count %}
+      <li class="bad"><span>{{ to_connect.count }} active employee{{ to_connect.count|pluralize }} with no connected PC.</span><a class="go" href="{% url 'deployment' %}?install=waiting#employees">Show employees</a></li>
+    {% endif %}
+    {% if offline %}
+      <li class="bad"><span>{{ offline }} device{{ offline|pluralize }} disconnected. Check the employee table below for the last seen time.</span><a class="go" href="#employee-monitoring">Investigate</a></li>
+    {% endif %}
+    {% if command.devices.with_errors %}
+      <li class="bad"><span>{{ command.devices.with_errors }} device{{ command.devices.with_errors|pluralize }} reported an error on the last check.</span><a class="go" href="{% url 'deployment' %}?connection=failed#employees">Show PCs</a></li>
+    {% endif %}
+    {% if report.unclassified_count %}
+      <li class="info"><span>{{ report.unclassified_count }} unclassified app or website{{ report.unclassified_count|pluralize }} need a category.</span><a class="go" href="{% url 'unclassified_list' %}">Classify</a></li>
+    {% endif %}
+  </ul>
+  {% else %}
+    <p class="allclear">Nothing needs your attention right now.</p>
+  {% endif %}
+  {% endwith %}
+  </details>
+</section>
+
+<section class="section" aria-label="Monitoring overview and device status">
+  <div class="row row-chart">
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Monitoring overview</h2><p>Productive, non-productive and idle time per day</p></div>
+      </div>
+      <div class="card-body">
+        {% url 'trend_organization' as trend_url %}
+        {% include "analytics/_trend.html" with url=trend_url|add:"?"|add:request.GET.urlencode %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Device status</h2><p>{{ donut.total }} registered</p></div><a href="{% url 'deployment' %}">Manage devices</a></div>
+      <div class="card-body">
+        <div class="donut-wrap">
+          <div class="donut" style="background: conic-gradient(#059669 0 {{ donut.online_end }}%, #94a3b8 {{ donut.online_end }}% {{ donut.offline_end }}%, #e5e7eb {{ donut.offline_end }}% 100%);" role="img" aria-label="{{ donut.online }} online, {{ donut.offline }} offline of {{ donut.total }} devices">
+            <span><strong>{{ donut.total }}</strong><small>devices</small></span>
+          </div>
+          <ul class="donut-legend">
+            <li><span class="swatch" style="background:#059669"></span>Online <strong>{{ donut.online }}</strong></li>
+            <li><span class="swatch" style="background:#94a3b8"></span>Offline <strong>{{ donut.offline }}</strong></li>
+            <li><span class="swatch" style="background:#2563eb"></span>Pending approval <strong>{{ donut.pending }}</strong></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-label="Applications, teams and live activity">
+  <div class="row row-three">
+    <div class="card">
+      <div class="card-head"><div><h2>Top applications</h2><p>Ranked by time in the range</p></div></div>
+      <div class="card-body scroll-y">
+        {% for item in report.apps %}
+          {% if forloop.first %}<ol class="rank-list">{% endif %}
+            <li class="rank-row">
+              <span class="rank-num">{{ forloop.counter }}</span>
+              <span class="rank-icon" aria-hidden="true">{{ item.name|slice:":1" }}</span>
+              <span class="rank-name">{{ item.name }}<span class="rank-meta">{{ item.employees }} employee{{ item.employees|pluralize }}</span></span>
+              <span class="rank-value">{{ item.seconds|duration }}</span>
+              <div class="rank-bar" aria-hidden="true"><span style="width: {{ item.seconds|share:report.apps.0.seconds }}%"></span></div>
+            </li>
+          {% if forloop.last %}</ol>{% endif %}
+        {% empty %}
+          <p class="muted">No applications recorded for this range.</p>
+        {% endfor %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <div><h2>Team performance</h2><p>Productive share and monitored employees</p></div>
+        <a href="{% url 'team_list' %}">Manage teams</a>
+      </div>
+      <div class="card-body scroll-y">
+        {% if team_performance %}
+          <table class="team-table">
+            <thead><tr><th>Team</th><th>Productivity</th><th class="num">Monitored</th></tr></thead>
+            <tbody>
+              {% for team in team_performance %}
+                <tr>
+                  <td class="team-name"><a href="{% url 'dashboard_team' team.pk %}">{{ team.name }}</a></td>
+                  <td>
+                    <div class="prog">
+                      <span class="num">{{ team.productive_percent|percent }}</span>
+                      <div class="prog-track" aria-hidden="true"><span style="width: {{ team.productive_percent|default:0 }}%"></span></div>
+                    </div>
+                  </td>
+                  <td class="num">
+                    <span class="mon-dot {% if team.total and team.monitored == team.total %}full{% elif team.monitored %}some{% else %}none{% endif %}">{{ team.monitored }} / {{ team.total }}</span>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        {% else %}
+          <p class="muted">No teams yet. <a href="{% url 'team_create' %}">Create a team</a> to group employees.</p>
+        {% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Live activity</h2><p>Latest reported events</p></div></div>
+      <div class="card-body scroll-y">
+        {% if live.activity %}
+          <ul class="act-list">
+            {% for item in live.activity %}
+              <li class="act-row act-{{ item.kind }}">
+                <span class="act-name" title="{{ item.name }}">{{ item.name }}</span>
+                <span class="act-meta">{{ item.who }} · {{ item.time|time:"H:i" }}</span>
+              </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">No app or website activity has been reported yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="employee-monitoring" aria-labelledby="employees-title" hx-get="{% url 'dashboard_organization' %}?{{ request.GET.urlencode }}" hx-trigger="every 30s" hx-select="#employee-monitoring" hx-swap="outerHTML">
+  <div class="card">
+    <div class="card-head">
+      <div><h2 id="employees-title">Employees</h2><p>Agent state now and usage for the selected range. Click a name for the full view.</p></div>
+      <div class="card-actions">
+        <a class="primary" href="{% url 'person_create' %}">Add employee</a>
+        <a href="{% url 'deployment' %}">Install WinAgent</a>
+        <a href="{% url 'person_list' %}">Open Employees</a>
+        <a href="{% url 'dashboard_organization_export' %}">Export CSV</a>
+      </div>
+    </div>
+    {% if monitoring_group %}
+      <p class="muted">Showing: <strong>{{ monitoring_group_label }}</strong>. <a href="{{ request.path }}#employee-monitoring">Show all employees</a></p>
+    {% endif %}
+    <div class="table-wrap emp-scroll">
+      <table class="live-table">
+        <thead>
+          <tr><th>Employee</th><th>Monitoring</th><th>Agent</th><th>Current window</th><th class="live-num">Queued</th><th>Last seen</th><th class="live-num">Application time</th><th class="live-num">Productive</th><th class="live-num">Activity</th></tr>
+        </thead>
+        <tbody>
+        {% for row in monitoring_rows %}
+          <tr>
+            <td class="live-name"><a href="{% url 'dashboard_employee' row.user.pk %}">{{ row.user.full_name }}</a></td>
+            <td>{% include "devices/_monitoring_badge.html" with status=row.live.monitoring %}</td>
+            <td>
+              <span class="live-agent">
+              {% if row.live.state == "up_to_date" %}<span class="dot dot-online" aria-hidden="true"></span>Online
+              {% elif row.live.state == "uploading" %}<span class="dot dot-online" aria-hidden="true"></span>Uploading
+              {% elif row.live.state == "offline" %}<span class="dot dot-offline" aria-hidden="true"></span>Offline
+              {% else %}<span class="muted">Not connected</span>{% endif %}
+              </span>
+            </td>
+            <td>{% if row.live.focus_app %}<span class="live-window" title="{{ row.live.focus_app }}">{{ row.live.focus_app }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="live-num">{{ row.live.queue_depth }}</td>
+            <td>{{ row.live.last_seen|date:"j M, H:i"|default:"never" }}</td>
+            <td class="live-num">{{ row.app_seconds|duration }}</td>
+            <td class="live-num">{{ row.productive_percent|percent }}</td>
+            <td class="live-num">{{ row.activity_percent|percent }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="9" class="muted">No employees yet. <a href="{% url 'person_create' %}">Add an employee</a> to start.</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="monitoring-status" aria-labelledby="status-title">
+  <div class="ms-head">
+    <h2 id="status-title" class="section-title" style="margin:0">Monitoring status</h2>
+    <p class="ms-count"><strong>{{ overview.active_count }}</strong> of {{ overview.employees|length }} employee{{ overview.employees|length|pluralize }} actively monitored</p>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div><h2>Employees</h2></div></div>
+      {% if overview.employees %}
+        <div class="ms-scroll table-wrap">
+          <table class="ms-table">
+            <thead><tr><th>Name</th><th>Team</th><th>Status</th></tr></thead>
+            <tbody>
+              {% for person in overview.employees %}
+                <tr>
+                  <td>{{ person.name }}</td>
+                  <td class="ms-muted">{{ person.teams }}</td>
+                  <td>
+                    {% if person.group == "active" %}<span class="ms-pill active">Active</span>
+                    {% elif person.group == "paused" %}<span class="ms-pill paused">Paused</span>
+                    {% else %}<span class="ms-pill inactive" title="{% if person.status == 'not_connected' %}No PC connected{% else %}Monitoring is not running on the PC{% endif %}">Inactive</span>{% endif %}
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="ms-empty">No employees yet.</p>
+      {% endif %}
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Teams</h2></div></div>
+      {% if overview.teams %}
+        <div class="ms-scroll table-wrap">
+          <table class="ms-table">
+            <thead><tr><th>Team</th><th class="ms-num">Employees</th><th class="ms-num">Monitored</th></tr></thead>
+            <tbody>
+              {% for team in overview.teams %}
+                <tr>
+                  <td>{{ team.name }}{% if team.none_monitored %}<span class="ms-flag">None monitored</span>{% endif %}</td>
+                  <td class="ms-num">{{ team.total }}</td>
+                  <td class="ms-num">{{ team.monitored }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <p class="ms-empty">No teams yet. Create teams to see their monitoring status here.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="usage-title">
+  <h2 class="section-title" id="usage-title">Departments and websites</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div><h2>Departments</h2></div></div>
+      <table class="plain-table">
+        <thead><tr><th>Department</th><th class="num">Employees</th><th class="num">Application time</th><th class="num">Productive</th></tr></thead>
+        <tbody>
+          {% for row in report.departments %}
+            <tr><td>{{ row.name }}</td><td class="num">{{ row.employee_count }}</td><td class="num">{{ row.app_seconds|duration }}</td><td class="num">{{ row.productive_percent|percent }}</td></tr>
+          {% empty %}
+            <tr><td colspan="4" class="muted">No employees yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Top websites</h2><p>Ranked by time in the range</p></div></div>
+      <div class="scroll-y">
+      {% for item in report.websites %}
+        {% if forloop.first %}<ol class="rank-list">{% endif %}
+          <li class="rank-row">
+            <span class="rank-num">{{ forloop.counter }}</span>
+            <span class="rank-icon" aria-hidden="true">{{ item.name|slice:":1" }}</span>
+            <span class="rank-name">{{ item.name }}<span class="rank-meta">{{ item.employees }} employee{{ item.employees|pluralize }}</span></span>
+            <span class="rank-value">{{ item.seconds|duration }}</span>
+            <div class="rank-bar" aria-hidden="true"><span style="width: {{ item.seconds|share:report.websites.0.seconds }}%"></span></div>
+          </li>
+        {% if forloop.last %}</ol>{% endif %}
+      {% empty %}
+        <p class="muted">No websites recorded for this range.</p>
+      {% endfor %}
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-labelledby="analytics-title">
+  <h2 class="section-title" id="analytics-title">Devices and screenshots</h2>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-head"><div><h2>Device connections</h2></div></div>
+      <div class="chart-small" data-donut data-online="{{ command.devices.online }}" data-offline="{{ command.devices.offline }}" data-revoked="{{ command.devices.revoked }}">
+        <canvas role="img" aria-label="Device connections: connected, disconnected and revoked"></canvas>
+      </div>
+      <p class="muted chart-empty" hidden>No PCs are registered yet. Install WinAgent and approve a PC to see connections here.</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Screenshot activity</h2></div><a href="{% url 'screenshot_list' %}">Open Screenshots</a></div>
+      <div class="chart-small" data-shot-bars data-labels="{{ command.screenshots.per_day.labels|join:',' }}" data-counts="{{ command.screenshots.per_day.counts|join:',' }}">
+        <canvas role="img" aria-label="Screenshots captured per day"></canvas>
+      </div>
+      <p class="muted chart-empty" hidden>No screenshots were captured in this range.</p>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-label="Recent events and screenshots">
+  <div class="row row-two">
+    <div class="card" id="recent-activity" hx-get="{% url 'dashboard_organization' %}?{{ request.GET.urlencode }}" hx-trigger="every 15s" hx-select="#recent-activity" hx-swap="outerHTML">
+      <div class="card-head"><div><h2 id="activity-title">Recent events</h2><p>Account, device and monitoring events</p></div><a href="{% url 'audit_log_list' %}">View all activity</a></div>
+      <div class="ra-area">
+      {% if command.activity %}
+        <div class="scroll-y">
+        <ul class="ra-list">
+          {% for entry in command.activity %}
+            <li class="ra-item">
+              <span class="ra-icon ra-{{ entry.status }}" aria-hidden="true"><svg viewBox="0 0 24 24">{% if entry.icon == "person" %}<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>{% elif entry.icon == "mail" %}<rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 6-10 7L2 6"/>{% elif entry.icon == "check" %}<polyline points="20 6 9 17 4 12"/>{% elif entry.icon == "ban" %}<circle cx="12" cy="12" r="10"/><line x1="4.9" y1="4.9" x2="19.1" y2="19.1"/>{% elif entry.icon == "device" %}<rect x="3" y="4" width="18" height="12" rx="2"/><line x1="8" y1="20" x2="16" y2="20"/>{% elif entry.icon == "shield" %}<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>{% elif entry.icon == "play" %}<polygon points="5 3 19 12 5 21 5 3"/>{% elif entry.icon == "edit" %}<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>{% else %}<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>{% endif %}</svg></span>
+              <div class="ra-body">
+                <p class="ra-text">{{ entry.text }}</p>
+                <p class="ra-meta">
+                  <span class="ra-badge ra-{{ entry.status }}">{{ entry.status_label }}</span>
+                  <time datetime="{{ entry.at|date:'c' }}">{{ entry.when_date }}, {{ entry.when_time }} IST</time>
+                  <span>· {{ entry.ago }} ago</span>
+                  {% if entry.detail %}<span>· {{ entry.detail }}</span>{% endif %}
+                </p>
+              </div>
+            </li>
+          {% endfor %}
+        </ul>
+        </div>
+        {% with page=command.activity %}
+          {% if page.paginator.num_pages > 1 %}
+            <nav class="ra-pager" aria-label="Recent events pages">
+              {% if page.has_previous %}<a href="?{% if activity_query %}{{ activity_query }}&amp;{% endif %}page={{ page.previous_page_number }}#recent-activity">Previous</a>{% else %}<span class="ra-disabled">Previous</span>{% endif %}
+              <span class="ra-numbers">
+                {% for n in page.paginator.get_elided_page_range %}
+                  {% if n == page.paginator.ELLIPSIS %}<span class="ra-gap">…</span>
+                  {% elif n == page.number %}<span class="ra-current" aria-current="page">{{ n }}</span>
+                  {% else %}<a href="?{% if activity_query %}{{ activity_query }}&amp;{% endif %}page={{ n }}#recent-activity">{{ n }}</a>{% endif %}
+                {% endfor %}
+              </span>
+              {% if page.has_next %}<a href="?{% if activity_query %}{{ activity_query }}&amp;{% endif %}page={{ page.next_page_number }}#recent-activity">Next</a>{% else %}<span class="ra-disabled">Next</span>{% endif %}
+            </nav>
+          {% endif %}
+        {% endwith %}
+      {% else %}
+        <div class="ra-empty">
+          <p class="muted">No account, device or monitoring activity yet. It appears here as your team uses the system.</p>
+        </div>
+      {% endif %}
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-head"><div><h2>Recent screenshots</h2></div><a href="{% url 'screenshot_list' %}">View all</a></div>
+      {% if command.screenshots.recent %}
+        <ul class="list-plain">
+          {% for shot in command.screenshots.recent %}
+            <li>
+              <a href="{% url 'screenshot_detail' shot.pk %}">{{ shot.user.full_name|default:shot.user.email }}</a>
+              <span class="when">{{ shot.captured_at|date:"j M, H:i" }} {{ zone_label }}</span>
+            </li>
+          {% endfor %}
+        </ul>
+      {% else %}
+        <p class="muted">No screenshots yet. <a href="{% url 'screenshot_settings' %}">Check screenshot settings</a>.</p>
+      {% endif %}
+    </div>
+  </div>
+</section>
+
+<section class="section" id="monitoring-settings" aria-labelledby="settings-title">
+  <div class="card">
+    <div class="card-head">
+      <div><h2 id="settings-title">Monitoring settings in effect</h2><p>Times are in {{ zone_label }}</p></div>
+      <div class="card-actions">
+        <a href="{% url 'policy_settings' %}">Change monitoring</a>
+        <a href="{% url 'screenshot_settings' %}">Change screenshots</a>
+      </div>
+    </div>
+    <div class="tiles settings-tiles">
+      <div class="tile"><span class="tile-value">{% if policy.enabled %}On{% else %}Off{% endif %}</span><span class="tile-label">Monitoring</span><span class="tile-sub">{{ policy_days }} · {{ policy.start_time|time:"H:i" }} to {{ policy.end_time|time:"H:i" }}</span></div>
+      <div class="tile"><span class="tile-value">{{ policy.sample_interval_seconds }} s</span><span class="tile-label">Sample interval</span></div>
+      <div class="tile"><span class="tile-value">{{ policy.idle_threshold_seconds }} s</span><span class="tile-label">Idle threshold</span></div>
+      <div class="tile"><span class="tile-value">{{ policy.sync_interval_seconds }} s</span><span class="tile-label">Upload interval</span></div>
+      <div class="tile"><span class="tile-value">{% if shot_policy.is_active %}On{% elif shot_policy and shot_policy.enabled %}Not configured{% else %}Off{% endif %}</span><span class="tile-label">Screenshots</span></div>
+      <div class="tile"><span class="tile-value">{% if shot_policy.interval_seconds %}{{ shot_policy.interval_seconds }} s{% else %}Not set{% endif %}</span><span class="tile-label">Screenshot interval</span></div>
+      <div class="tile"><span class="tile-value">{% if shot_policy.retention_days %}{{ shot_policy.retention_days }} days{% else %}Not set{% endif %}</span><span class="tile-label">Screenshot retention</span></div>
+      <div class="tile"><span class="tile-value">{% if shot_policy.blur_level %}{{ shot_policy.get_blur_level_display }}{% else %}Not set{% endif %}</span><span class="tile-label">Blur</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" aria-label="System status">
+  {% if command.devices.offline or command.devices.with_errors %}
+    <div class="status-bar warn"><span>Some devices need attention. See Needs attention above.</span><span class="meta">Checked {{ live.checked_at|time:"H:i:s" }} {{ zone_label }}</span></div>
+  {% else %}
+    <div class="status-bar ok"><span>All systems are running smoothly.</span><span class="meta">Checked {{ live.checked_at|time:"H:i:s" }} {{ zone_label }} · Monitoring starts: {{ command.monitoring.starts_requested }} requested, {{ command.monitoring.starts_confirmed }} confirmed</span></div>
+  {% endif %}
+</section>
+{% endtimezone %}
+{% endblock %}

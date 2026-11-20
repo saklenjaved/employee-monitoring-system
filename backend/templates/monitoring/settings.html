@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}Monitoring settings{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Monitoring settings{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Monitoring settings</h1>
+  <p class="muted">Applies to every agent in your organization. Policy version {{ policy.version }}. Screenshot settings are on the Screenshots settings page.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+  </form>
+</div>
+{% endblock %}

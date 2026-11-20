@@ -10,7 +10,7 @@ The Windows Monitoring Agent POC is a completed component and is not rebuilt. Th
 ### Confirmed by the product owner
 | Topic | Decision |
 |---|---|
-| Backend location | Inside this repository (`windows-agent/`), in its own `server/` folder. The agent code is not changed. |
+| Backend location | Inside this repository (`windows-agent/`), in its own `backend/` folder. The agent code is not changed. |
 | Activity data | Idle time only (time since last input). No keyboard or mouse interaction counts. |
 | Website tracking | Backend accepts website events now. The Chrome extension is a later, separate phase. |
 | Screenshot access | Admin and assigned Managers can view. Download needs explicit permission. Employees cannot view screenshots. Every view and download is audited. |
@@ -54,7 +54,7 @@ Agent-side items to do when the real backend is ready (not now):
 Each phase ends with something that can be run and checked. Tenant-isolation and role tests are part of every phase.
 
 ### Phase 0: Setup
-- **Develop:** Django project in `server/`, PostgreSQL in Docker, local S3 stand-in (MinIO), test setup, settings with secrets outside source code.
+- **Develop:** Django project in `backend/`, PostgreSQL in Docker, local S3 stand-in (MinIO), test setup, settings with secrets outside source code.
 - **Apps:** project settings only.
 - **Depends on:** nothing.
 - **Outcome:** server starts, database connects, empty test suite runs.

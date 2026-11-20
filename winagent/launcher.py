@@ -16,13 +16,13 @@ import logging
 import threading
 import time
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Callable
 
 from winagent.agent_policy import AgentPolicy, PolicyError, parse_policy
 from winagent.api_client import AgentApi
 from winagent.config import AgentConfig
-from winagent.credentials import CredentialStore
+from winagent.credentials import CredentialStore, DeviceCredential
 from winagent.events import utc_now
 from winagent.health import HealthSnapshot, write_health
 from winagent.http_client import AuthError, HttpError
@@ -31,10 +31,19 @@ from winagent.monitors.app_monitor import AppMonitor
 from winagent.monitors.website_monitor import StubWebsiteMonitor
 from winagent.platform_base import SessionInspector
 from winagent.queue import EventQueue
+from winagent.registration import _parse_expiry
 from winagent.screenshots.manager import ScreenshotManager
 from winagent.sync import SyncManager
 
 log = logging.getLogger("winagent.launcher")
+
+# While the employee's start is waiting for this PC, the agent asks the server more often.
+AWAITING_START_HEARTBEAT_SECONDS = 60
+# States in which the agent holds a start. Only "active" collects anything.
+START_FOLLOWING_STATES = ("active", "paused_hours", "unsupported_session")
+# The credential is renewed this long before it expires, so the PC never has to ask to connect again.
+RENEW_BEFORE = timedelta(days=3)
+RENEW_CHECK_SECONDS = 3600
 
 
 @dataclass
@@ -44,6 +53,7 @@ class Timers:
     sync_due: float = 0.0
     screenshot_due: float = 0.0
     heartbeat_due: float = 0.0
+    renew_due: float = 0.0
 
 
 class Agent:
@@ -78,6 +88,10 @@ class Agent:
         self._policy: AgentPolicy | None = None
         self._logged_session: str | None = None
         self._last_skip_reason: str | None = None
+        # Collection needs a start from the server. This is the start the agent is running under, and the
+        # monotonic time it stops. Zero means no start, so the agent collects nothing.
+        self._start_id: str | None = None
+        self._authorized_until = 0.0
         self.health = HealthSnapshot(agent_version=version)
 
     @property
@@ -104,11 +118,17 @@ class Agent:
             return "not_registered"
         if self._sync.auth_failed:
             return "needs_registration"
+        if mono >= self._timers.renew_due:
+            self._renew_if_due(now_utc, mono)
 
         if mono >= self._timers.policy_due:
             self._refresh_policy(mono)
         if self._policy is None:
             return "paused_policy"
+        # The employee starts monitoring from the dashboard. Without a current start, collect nothing.
+        if mono >= self._authorized_until:
+            self._maybe_heartbeat(now_utc, mono, "awaiting_start")
+            return "awaiting_start"
 
         session_type = self._session.session_type()
         self.health.session_type = session_type
@@ -133,9 +153,38 @@ class Agent:
         self._maybe_heartbeat(now_utc, mono, "active")
         return "active"
 
+    @property
+    def needs_pairing(self) -> bool:
+        """The server rejected this PC's credential. The caller must forget it and ask to connect again."""
+        return self._sync.auth_failed
+
+    def _renew_if_due(self, now_utc: datetime, mono: float) -> None:
+        self._timers.renew_due = mono + RENEW_CHECK_SECONDS
+        cred = self._creds.load()
+        if cred is None or cred.expires_at - now_utc > RENEW_BEFORE:
+            return
+        try:
+            reply = self._api.renew_credential()
+        except AuthError:
+            # Expired or revoked: renewal cannot help, so the PC must connect again.
+            self._sync.auth_failed = True
+            return
+        except HttpError as exc:
+            log.warning("credential renewal failed (%s)", exc.for_log())
+            return
+        self._creds.save(
+            DeviceCredential(
+                device_id=cred.device_id,
+                token=reply["credential"],
+                expires_at=_parse_expiry(reply["expires_at"]),
+            )
+        )
+        log.info("credential renewed")
+
     def _refresh_policy(self, mono: float) -> None:
         try:
             raw = self._api.get_config()
+            before = self._policy.screenshots if self._policy else None
             parsed = parse_policy(raw, self._cfg.monitoring, self._cfg.screenshots)
             # Local exclusions always apply, and the server can add more.
             apps = frozenset(self._cfg.monitoring.excluded_apps) | parsed.excluded_apps
@@ -146,6 +195,9 @@ class Agent:
             )
             self._app.set_excluded(apps)
             log.info("policy refreshed (version %s)", self._policy.version)
+            shots = self._policy.screenshots
+            if before is None or (before.enabled, before.interval_seconds) != (shots.enabled, shots.interval_seconds):
+                log.info("screenshot settings: enabled=%s interval=%ss", shots.enabled, shots.interval_seconds)
         except AuthError:
             self._sync.auth_failed = True
             self._sync.last_error_code = "auth_failed"
@@ -166,7 +218,9 @@ class Agent:
 
     def _flush(self, mono: float) -> None:
         result = self._sync.flush()
-        self._timers.sync_due = mono + self._cfg.monitoring.sync_interval_seconds
+        # The policy's upload interval wins once a policy is loaded. Before that, the local default applies.
+        interval = self._policy.sync_interval_seconds if self._policy else self._cfg.monitoring.sync_interval_seconds
+        self._timers.sync_due = mono + interval
         if result.auth_failed:
             log.warning("sync stopped: re-registration required")
 
@@ -190,9 +244,12 @@ class Agent:
     def _maybe_heartbeat(self, now_utc: datetime, mono: float, state: str) -> None:
         if mono < self._timers.heartbeat_due:
             return
-        self._timers.heartbeat_due = mono + self._cfg.monitoring.heartbeat_interval_seconds
+        interval = (
+            AWAITING_START_HEARTBEAT_SECONDS if state == "awaiting_start" else self._cfg.monitoring.heartbeat_interval_seconds
+        )
+        self._timers.heartbeat_due = mono + interval
         try:
-            self._api.heartbeat(
+            response = self._api.heartbeat(
                 agent_version=self._version,
                 sent_at=now_utc,
                 session_type=self._session.session_type(),
@@ -200,15 +257,34 @@ class Agent:
                 last_successful_sync_at=self._sync.last_successful_sync_at,
                 last_error_code=self._sync.last_error_code,
                 monitoring_state=state,
+                # The start is confirmed once the agent follows it: collecting, or paused by hours or the session type.
+                # A start received outside monitoring hours is then kept, and collection begins when the hours open.
+                monitoring_start_id=self._start_id if state in START_FOLLOWING_STATES else None,
+                focus=self._app.focus_for_heartbeat() if state == "active" else None,
             )
+            self._apply_start(response, mono)
         except AuthError:
             self._sync.auth_failed = True
         except HttpError as exc:
-            log.warning("heartbeat failed (%s)", exc.code)
+            log.warning("heartbeat failed (%s)", exc.for_log())
+
+    def _apply_start(self, response: dict, mono: float) -> None:
+        """Take the server's start instruction. No instruction means stop collecting at once."""
+        start = response.get("start") if isinstance(response, dict) else None
+        if not start:
+            self._start_id = None
+            self._authorized_until = 0.0
+            return
+        if start.get("id") != self._start_id:
+            self._start_id = start.get("id")
+            # Confirm to the server at the next tick rather than waiting for the normal heartbeat.
+            self._timers.heartbeat_due = mono
+            log.info("monitoring start received")
+        self._authorized_until = mono + int(start.get("authorized_seconds", 0))
 
     def run_forever(self, stop: threading.Event, tick_seconds: float = 1.0) -> None:
         log.info("agent started (version %s)", self._version)
-        while not stop.is_set():
+        while not stop.is_set() and not self.needs_pairing:
             try:
                 self.tick()
             except Exception:  # keep the agent alive; log only the exception type

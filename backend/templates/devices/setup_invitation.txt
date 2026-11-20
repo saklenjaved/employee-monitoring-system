@@ -1,0 +1,11 @@
+Hello {{ full_name }},
+
+{{ organization_name }} has started monitoring setup for your work computer.
+
+To connect it:
+1. Sign in at {{ login_url }}
+2. Your dashboard shows "Approve this PC?" when your computer asks to connect. Check the computer name and approve it with your password.
+
+Approve only on your own computer. Read your organization's monitoring notice before you connect it.
+
+This email contains no code and no password. The approval window is open for a limited time.

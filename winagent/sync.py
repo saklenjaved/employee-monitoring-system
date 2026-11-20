@@ -102,7 +102,7 @@ class SyncManager:
                 self.last_error_code = exc.code
                 if attempt + 1 >= self._max_attempts:
                     result.gave_up = True
-                    log.warning("sync gave up for now after %d attempts (%s)", attempt + 1, exc.code)
+                    log.warning("sync gave up for now after %d attempts (%s)", attempt + 1, exc.for_log())
                     return "gave_up"
                 delay = self.backoff_for(attempt)
                 result.backoff_seconds.append(delay)
@@ -114,7 +114,7 @@ class SyncManager:
                 ids = {e.event_id for e in batch}
                 self._queue.ack(ids)
                 result.rejected += len(ids)
-                log.warning("batch dropped after permanent error (%s)", exc.code)
+                log.warning("batch dropped after permanent error (%s)", exc.for_log())
                 return "dropped"
             return self._apply(batch, response, result)
         return "gave_up"

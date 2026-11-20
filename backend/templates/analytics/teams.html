@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% load analytics_extras %}
+{% block title %}My teams{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>My teams</h1>
+  {% include "analytics/_filters.html" %}
+  <table>
+    <tr><th>Team</th><th>Employees</th><th>Application time</th><th>Productive share</th><th>Activity</th></tr>
+    {% for row in rows %}
+      <tr>
+        <td><a href="{% url 'dashboard_team' row.team.pk %}">{{ row.team.name }}</a></td>
+        <td>{{ row.employee_count }}</td>
+        <td>{{ row.app_seconds|duration }}</td>
+        <td>{{ row.productive_percent|percent }}</td>
+        <td>{{ row.activity_percent|percent }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="muted">You are not assigned to any team yet.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endblock %}

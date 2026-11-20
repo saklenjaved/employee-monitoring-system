@@ -47,9 +47,19 @@ paths:
                 $ref: '#/components/schemas/PolicyResponse'
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+        '429': { description: Rate limited. Retry with backoff. }
   /events/batch/:
     post:
       summary: Activity ingestion (TAD 10, activity ingestion)
+      description: |
+        Each event is checked against docs/event-schema.json. Beyond the schema, the Django backend
+        also rejects a captured_at more than 10 minutes in the future or more than 30 days old,
+        out-of-range numbers (a duration over 1 hour), a process_name that is not a plain file name,
+        and a domain that is not a valid host name. Rejected events are listed in `rejected`
+        so the agent drops them. An event without a valid event_id cannot be named in the answer and
+        is skipped, so it is in none of the three lists. A window_title is checked but not stored.
+        A body over 2 MB or over 500 events gets 413. Each device may send 60 batches a minute (429).
+        Duplicates are recognised per device by event_id.
       operationId: ingestEvents
       requestBody:
         required: true
@@ -66,11 +76,21 @@ paths:
                 $ref: '#/components/schemas/BatchResult'
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '413': { description: Batch or payload too large. }
         '429': { description: Rate limited. Retry with backoff. }
   /screenshots/authorize/:
     post:
       summary: Screenshot upload authorization (TAD 10, upload authorization)
+      description: |
+        The server repeats every policy check: screenshots switched on for the organization (the Admin
+        has chosen interval, retention and blur), inside the monitoring days and hours in the
+        organization's time zone, and the employee and their teams not excluded. If any check fails the
+        answer is 403 `policy_denies`, and the reason is not given. The upload link is for one object,
+        one size and one SHA-256 and lasts 5 minutes. The agent must send `upload_headers` with the PUT.
+        The image goes straight to the private bucket and never through the Django server.
+        Asking again for an unfinished screenshot_id returns a new link for the same object (200).
+        A finished screenshot_id gets 409 `already_finished`.
       operationId: authorizeScreenshotUpload
       requestBody:
         required: true
@@ -85,11 +105,19 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScreenshotAuthorizeResponse'
+        '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
-        '403': { description: Policy denies screenshots now. }
+        '403': { description: Policy denies screenshots now (code policy_denies), or the account is disabled. }
+        '409': { description: This screenshot_id was already finished (code already_finished). }
+        '429': { description: Rate limited. Retry with backoff. }
   /screenshots/{screenshot_id}/complete/:
     post:
       summary: Screenshot upload completion (TAD 10, upload completion)
+      description: |
+        With status `uploaded` the server checks that the object exists in storage with the announced
+        size, otherwise 409 `object_missing`. With status `failed` nothing is kept (the object is
+        deleted) and the failure is recorded. Reporting the same screenshot again changes nothing.
+        A screenshot of another device is 404.
       operationId: completeScreenshotUpload
       parameters:
         - name: screenshot_id
@@ -111,8 +139,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ScreenshotCompleteResponse'
+        '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+        '409': { description: The upload was not found in storage (code object_missing). }
+        '429': { description: Rate limited. Retry with backoff. }
   /heartbeat/:
     post:
       summary: Agent heartbeat and status (TAD 10, heartbeat / status)
@@ -130,7 +161,85 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HeartbeatResponse'
+        '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '429': { description: Rate limited. Retry with backoff. }
+  /pairing/requests/:
+    post:
+      summary: A PC with no credential asks to connect (no code; the employee approves it on their dashboard)
+      operationId: createPairingRequest
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [org_token, device_name, os_version, agent_version]
+              additionalProperties: false
+              properties:
+                # Written by the installer (/ORGTOKEN): an organization token, or the token in an employee's install
+                # package (valid only while that employee's setup window is open). The server finds the organization
+                # from it, never from the PC.
+                org_token: { type: string, maxLength: 128 }
+                device_name: { type: string, maxLength: 128 }
+                os_version: { type: string, maxLength: 64 }
+                agent_version: { type: string, maxLength: 32 }
+                architecture: { type: string, enum: [x64] }
+      responses:
+        '201':
+          description: Request created. Keep poll_token secret; it is shown only here.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [request_id, poll_token, expires_at]
+                properties:
+                  request_id: { type: string, format: uuid }
+                  poll_token: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '400': { $ref: '#/components/responses/Error' }
+        '429': { description: Rate limited. Retry with backoff. }
+  /pairing/requests/{request_id}/:
+    get:
+      summary: Poll a pairing request. The credential is returned once, with status approved.
+      operationId: pollPairingRequest
+      security: []
+      parameters:
+        - { name: request_id, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: Current status.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [pending, approved, delivered, expired] }
+                  device_id: { type: string, format: uuid }
+                  credential: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '404': { $ref: '#/components/responses/Error' }
+        '429': { description: Rate limited. Retry with backoff. }
+  /devices/credential/renew/:
+    post:
+      summary: Renew this PC's credential with its current credential. No employee approval. The old credential stops working.
+      operationId: renewDeviceCredential
+      responses:
+        '200':
+          description: The new credential, shown once.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [credential, expires_at]
+                properties:
+                  credential: { type: string }
+                  expires_at: { type: string, format: date-time }
+        '401': { $ref: '#/components/responses/Error' }
+        '429': { description: Rate limited. Retry with backoff. }
 components:
   securitySchemes:
     deviceBearer:
@@ -186,12 +295,21 @@ components:
           properties:
             sample_interval_seconds: { type: integer, minimum: 5, maximum: 300 }
             idle_threshold_seconds: { type: integer, minimum: 60, maximum: 3600 }
+            # How often the agent uploads queued events. The agent uses it when present, else its local default.
+            sync_interval_seconds: { type: integer, minimum: 30, maximum: 900 }
         screenshots:
           type: object
           required: [enabled]
           properties:
             enabled: { type: boolean, default: false }
             interval_seconds: { type: integer, minimum: 60, maximum: 3600 }
+            blur_level:
+              type: string
+              enum: [none, low, medium, high]
+              description: |
+                Optional. Chosen by the Admin. The current Windows agent ignores it (it can only cover
+                fixed regions, see exclusions.blur_regions). When enabled is false, interval_seconds and
+                blur_level are left out.
         exclusions:
           type: object
           properties:
@@ -278,10 +396,25 @@ components:
         session_type: { type: string, enum: [console, rdp, citrix, vdi, unknown] }
         queue_depth: { type: integer, minimum: 0 }
         last_error_code: { type: string, maxLength: 64, nullable: true }
-        monitoring_state: { type: string, enum: [active, paused_hours, paused_policy, unsupported_session, not_registered] }
+        monitoring_state: { type: string, enum: [active, awaiting_start, paused_hours, paused_policy, unsupported_session, not_registered] }
+        # The start request the agent is collecting under. Sent only with monitoring_state "active".
+        monitoring_start_id: { type: string, format: uuid, nullable: true }
+        # The focused app, sent only while monitoring is active. Never background processes.
+        focus_app: { type: string, maxLength: 128 }
+        # The focused window title. Sent only when the Admin allows window titles and the title is not blocked.
+        focus_title: { type: string, maxLength: 256 }
     HeartbeatResponse:
       type: object
       required: [acknowledged]
       properties:
         acknowledged: { type: boolean }
         policy_changed: { type: boolean }
+        # The employee's start from the dashboard. Null means collect nothing. While the start runs, the agent
+        # keeps collecting until authorized_seconds have passed, unless a later heartbeat says otherwise.
+        start:
+          type: object
+          nullable: true
+          required: [id, authorized_seconds]
+          properties:
+            id: { type: string, format: uuid }
+            authorized_seconds: { type: integer, minimum: 0 }

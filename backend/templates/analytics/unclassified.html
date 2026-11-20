@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% load analytics_extras %}
+{% block title %}Unclassified items{% endblock %}
+{% block crumbs %}<a href="{% url 'rule_list' %}">Classification rules</a><span class="sep">/</span>Unclassified items{% endblock %}
+{% block content %}
+<style>
+  /* Unclassified items page. Uses the page tokens from base.html and the same card and KPI look as the Admin dashboard. */
+  .uc-head { display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+  .uc-head h1 { margin: 0 0 4px; }
+  .uc-head p { margin: 0; }
+  .uc-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 18px; }
+  @media (min-width: 700px) { .uc-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  .uc-stat { display: flex; gap: 12px; align-items: flex-start; padding: 16px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; min-width: 0; }
+  .uc-stat-icon { flex: none; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface)); color: var(--c-primary); }
+  .uc-stat-icon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .uc-stat-label { margin: 0; color: var(--c-muted); font-size: .85em; }
+  .uc-stat-value { margin: 2px 0 0; font-size: 1.6em; font-weight: 700; letter-spacing: -.01em; }
+  .uc-stat-context { margin: 0; color: var(--c-muted); font-size: .83em; }
+  .uc-card { padding: 0; overflow: hidden; }
+  .uc-card-body { padding: 16px 20px; }
+  .uc-card .list-bar { margin: 0; }
+  .uc-table { width: 100%; border-collapse: collapse; }
+  .uc-table th { text-align: left; font-size: .8em; text-transform: uppercase; letter-spacing: .04em; color: var(--c-muted); font-weight: 600; padding: 10px 14px; border-bottom: 1px solid var(--c-border); background: var(--c-bg); white-space: nowrap; }
+  .uc-table td { padding: 12px 14px; border-bottom: 1px solid var(--c-border); vertical-align: middle; font-size: .93em; }
+  .uc-table tr:last-child td { border-bottom: 0; }
+  .uc-table td.num { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .uc-name { display: block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .92em; }
+  .uc-type { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .82em; font-weight: 600; white-space: nowrap; background: color-mix(in srgb, var(--c-primary) 10%, var(--c-surface)); color: var(--c-primary); }
+  .uc-type.website { background: color-mix(in srgb, #0891b2 12%, var(--c-surface)); color: var(--c-teal); }
+  .uc-save { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 0; }
+  .uc-save select { width: auto; min-width: 150px; height: 36px; padding: 0 10px; box-sizing: border-box; }
+  .uc-save button { height: 36px; padding: 0 16px; box-sizing: border-box; }
+  .uc-save button[disabled] { opacity: .6; }
+  .uc-footer { padding: 12px 20px; border-top: 1px solid var(--c-border); display: flex; flex-wrap: wrap; gap: 8px 16px; justify-content: space-between; align-items: center; }
+  .uc-footer p { margin: 0; }
+  .uc-empty { text-align: center; padding: 40px 20px; }
+  .uc-empty-icon { width: 52px; height: 52px; margin: 0 auto 12px; border-radius: 14px; display: grid; place-items: center; background: color-mix(in srgb, var(--color-online, #16a34a) 14%, var(--c-surface)); color: var(--color-online, #15803d); }
+  .uc-empty-icon svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .uc-empty h2 { font-size: 1.05em; margin: 0 0 6px; }
+  .uc-empty p { margin: 0 auto; max-width: 460px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  @media (max-width: 760px) {
+    .uc-table thead { display: none; }
+    .uc-table, .uc-table tbody, .uc-table tr, .uc-table td { display: block; width: 100%; }
+    .uc-table tr { padding: 12px 14px; border-bottom: 1px solid var(--c-border); }
+    .uc-table td { border: 0; padding: 4px 0; }
+    .uc-table td.num::before { content: attr(data-label) ": "; color: var(--c-muted); }
+    .uc-name { max-width: 100%; }
+    .uc-save select { flex: 1 1 140px; min-width: 0; }
+  }
+</style>
+
+<header class="uc-head">
+  <div>
+    <h1>Unclassified items</h1>
+    <p class="muted">Applications and websites used in the last 30 days with no <a href="{% url 'rule_list' %}">rule</a> for at least one employee who uses them. Busiest first. Up to 1,000 are listed. Totals update when the daily summaries are built.</p>
+  </div>
+</header>
+
+<div id="unclassified-list"
+     hx-get="{{ request.get_full_path }}" hx-trigger="refreshList from:body" hx-select="#unclassified-list" hx-swap="outerHTML">
+<section class="uc-stats" aria-label="Summary">
+  <article class="uc-stat">
+    <span class="uc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg></span>
+    <div>
+      <p class="uc-stat-label">Items to classify</p>
+      <p class="uc-stat-value">{{ summary.count }}</p>
+      <p class="uc-stat-context">{% if summary.count >= item_limit %}Showing the first {{ item_limit }}{% else %}Applications and websites{% endif %}</p>
+    </div>
+  </article>
+  <article class="uc-stat">
+    <span class="uc-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+    <div>
+      <p class="uc-stat-label">Time without a rule</p>
+      <p class="uc-stat-value">{{ summary.seconds|duration }}</p>
+      <p class="uc-stat-context">Last 30 days, all employees</p>
+    </div>
+  </article>
+</section>
+
+<div class="card uc-card">
+  <div class="uc-card-body">
+    {% include "includes/_list_bar.html" %}
+  </div>
+  <div class="table-wrap">
+    <table class="uc-table">
+      {% include "includes/_list_head.html" %}
+      {% for item in listing.page %}
+        <tr>
+          <td><span class="uc-type{% if item.item_type == 'website' %} website{% endif %}">{% if item.item_type == 'website' %}Website{% else %}Application{% endif %}</span></td>
+          <td><span class="uc-name" title="{{ item.name }}">{{ item.name }}</span></td>
+          <td class="num" data-label="Time">{{ item.seconds|duration }}</td>
+          <td class="num" data-label="Employees">{{ item.employees }}</td>
+          <td>
+            <form method="post" action="{% url 'unclassified_classify' %}" class="uc-save"
+                  hx-post="{% url 'unclassified_classify' %}" hx-target="closest tr" hx-swap="outerHTML" hx-disabled-elt="find button">
+              {% csrf_token %}
+              <input type="hidden" name="item_type" value="{{ item.item_type }}">
+              <input type="hidden" name="name" value="{{ item.name }}">
+              <label class="sr-only" for="cat-{{ forloop.counter }}">Category for {{ item.name }}</label>
+              <select name="category" id="cat-{{ forloop.counter }}">
+                {% for value, label in categories %}<option value="{{ value }}">{{ label }}</option>{% endfor %}
+              </select>
+              <button type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5">
+          {% if listing.filtered %}
+            <div class="uc-empty"><p class="muted">No items match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.</p></div>
+          {% else %}
+            <div class="uc-empty">
+              <span class="uc-empty-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+              <h2>Everything is classified</h2>
+              <p class="muted">Every application and website used in the last 30 days has a rule. New ones appear here as employees use them.</p>
+            </div>
+          {% endif %}
+        </td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <div class="uc-footer">
+    {% include "includes/_list_footer.html" %}
+  </div>
+</div>
+</div>
+{% endblock %}

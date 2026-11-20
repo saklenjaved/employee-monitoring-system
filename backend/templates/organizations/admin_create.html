@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}New Admin{% endblock %}
+{% block crumbs %}<a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span>New Admin{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>New Admin for {{ organization.name }}</h1>
+  <p class="muted">The new Admin receives an email with a link to choose a password.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create Admin</button>
+    <a href="{% url 'organization_list' %}">Cancel</a>
+  </form>
+</div>
+
+{% if pending_admins %}
+<div class="card">
+  <h2>Admins who have not activated yet</h2>
+  <table>
+    <tr><th>Name</th><th>Email</th><th></th></tr>
+    {% for admin in pending_admins %}
+      <tr>
+        <td>{{ admin.full_name }}</td>
+        <td>{{ admin.email }}</td>
+        <td>
+          <form method="post" action="{% url 'organization_admin_resend_invite' admin.pk %}">
+            {% csrf_token %}<button type="submit" class="secondary">Resend invitation</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+{% endblock %}

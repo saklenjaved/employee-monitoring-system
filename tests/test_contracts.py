@@ -20,7 +20,11 @@ SIX_PATHS = {
     "/screenshots/{screenshot_id}/complete/": "post",
     "/heartbeat/": "post",
 }
-T = datetime(2026, 11, 1, 9, 0, 30, tzinfo=timezone.utc)
+# Pairing (docs/employee-pairing-plan.md): a PC with no credential yet asks to connect. These two calls
+# carry no device credential by design. They are protected by a secret poll token and rate limits.
+PAIRING_PATHS = {"/pairing/requests/", "/pairing/requests/{request_id}/"}
+PRE_CREDENTIAL_PATHS = PAIRING_PATHS | {"/devices/register/"}
+T =datetime(2026, 11, 1, 9, 0, 30, tzinfo=timezone.utc)
 
 
 @pytest.fixture(scope="module")
@@ -36,7 +40,7 @@ def schema():
 def test_contract_has_exactly_the_six_tad_capabilities(contract):
     found = {(p, op) for p, ops in contract["paths"].items() for op in ops}
     assert {(p, op) for p, op in SIX_PATHS.items()} <= found
-    assert len(contract["paths"]) == 6
+    assert set(contract["paths"]) - PAIRING_PATHS - {"/devices/credential/renew/"} == set(SIX_PATHS)
 
 
 def test_every_operation_has_responses_and_ids(contract):
@@ -51,7 +55,7 @@ def test_every_operation_has_responses_and_ids(contract):
 def test_only_register_and_security_schemes_skip_auth(contract):
     for path, ops in contract["paths"].items():
         for op in ops.values():
-            if path != "/devices/register/":
+            if path not in PRE_CREDENTIAL_PATHS:
                 assert "security" not in op or op["security"], f"{path} must require the device credential"
 
 

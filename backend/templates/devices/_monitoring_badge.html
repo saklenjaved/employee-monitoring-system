@@ -1,0 +1,10 @@
+{# One monitoring state as a status pill. `status` comes from devices.start (monitoring_status / monitoring_statuses). #}
+{% if status == "monitoring_active" %}<span class="status ok" title="The agent confirmed the start and is collecting">Monitoring active</span>
+{% elif status == "monitoring_paused" %}<span class="status wait" title="The agent has the start but is outside monitoring hours or in a remote session">Monitoring paused</span>
+{% elif status == "starting" %}<span class="status wait" title="The PC is online and picks up the start at its next check-in">Starting monitoring</span>
+{% elif status == "start_requested" %}<span class="status wait" title="Start requested; the PC has not been seen lately">Start requested</span>
+{% elif status == "awaiting_consent" %}<span class="status wait" title="The Admin approved monitoring; the employee has not confirmed yet">Approved – Waiting for employee</span>
+{% elif status == "ready_to_start" %}<span class="status wait" title="WinAgent is installed and registered; the Admin has not started monitoring">Installed – Pending approval</span>
+{% elif status == "device_offline" %}<span class="status bad" title="The PC has not checked in lately">Connection lost</span>
+{% elif status == "error" %}<span class="status bad" title="The start ran out before the agent confirmed it, or the agent reported an error">Error</span>
+{% else %}<span class="muted">Not connected</span>{% endif %}

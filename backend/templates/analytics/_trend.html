@@ -1,0 +1,9 @@
+{# A daily trend chart. static/js/app.js fetches `url` (JSON from analytics.dashboards) and draws it. #}
+<div class="trend" data-trend-url="{{ url }}">
+  <div class="chart-box"><canvas role="img" aria-label="Hours per day by category"></canvas></div>
+  <p class="muted chart-empty" hidden>No application time recorded for these dates.</p>
+  <details class="chart-table">
+    <summary>Show as table</summary>
+    <div class="table-wrap"><table></table></div>
+  </details>
+</div>

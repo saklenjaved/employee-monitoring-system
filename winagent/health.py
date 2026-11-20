@@ -45,6 +45,8 @@ def status_line(snapshot: HealthSnapshot) -> str:
     link = "Connected" if snapshot.connected else "Not connected"
     labels = {
         "active": "Monitoring active",
+        "awaiting_pairing": "Waiting for approval on the dashboard",
+        "awaiting_start": "Waiting for start from the dashboard",
         "paused_hours": "Outside monitoring hours",
         "paused_policy": "Monitoring paused by policy",
         "unsupported_session": "Session type not supported",

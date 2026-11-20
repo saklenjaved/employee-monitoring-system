@@ -1,0 +1,19 @@
+{% autoescape off %}
+Hello,
+
+The platform administrator asked to move your Employee Monitoring account from {{ source_name }} to {{ destination_name }}.
+
+Your confirmation code is:
+
+    {{ code }}
+
+To confirm the move, open {{ verify_url }} and enter your email address ({{ email }}) and this code.
+The code works once and expires in {{ expiry_hours }} hours.
+
+After you confirm, you leave {{ source_name }} and your devices registered there stop working.
+Your email and password stay the same. You can sign in again once the administrator of
+{{ destination_name }} has assigned your role.
+
+This email does not contain a password. Never share your code.
+If you did not expect this email, you can ignore it. Nothing changes until the code is used.
+{% endautoescape %}

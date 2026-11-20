@@ -1,0 +1,213 @@
+{% extends "base.html" %}
+{% block title %}Deployment{% endblock %}
+{% block content %}
+<style>
+  /* Compact top card */
+  .dep-top { display: flex; align-items: center; justify-content: space-between; gap: 12px 20px; flex-wrap: wrap; padding: 16px 20px; }
+  .dep-top h1 { margin: 0 0 4px; }
+  .dep-top p { margin: 0; max-width: 680px; }
+  /* Lower cards: same gap as the app's card stacks */
+  .dep-stack { display: grid; gap: 18px; margin-top: 18px; }
+  .dep-stack > .card { margin: 0; }
+
+  /* Two columns on desktop, one on phones. Cards in a row keep the same height. */
+  .dep-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; margin-top: 18px; align-items: stretch; }
+  .dep-row > .card { margin: 0; display: flex; flex-direction: column; }
+  .dep-row > .card > .dep-foot { margin-top: auto; }
+  .dep-row .stages { margin: 6px 0 0; }
+  @media (max-width: 900px) { .dep-row { grid-template-columns: minmax(0, 1fr); } }
+
+  /* Token and command rows */
+  .dep-copy { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 8px 0 0; }
+  .dep-code { flex: 1 1 260px; min-width: 0; margin: 0; padding: 10px 14px; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface-2); color: var(--c-text); font-family: ui-monospace, Consolas, monospace; font-size: .88em; font-weight: 500; letter-spacing: 0; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .dep-note { color: var(--c-muted); font-size: .85em; }
+  .dep-copy button, .dep-copy .button { margin: 0; }
+  .dep-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 4px; }
+  .dep-card-head h2 { margin: 0; }
+  .dep-card-head p { margin: 0 0 8px; }
+  .dep-links { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 0; }
+  .dep-links .button { margin: 0; }
+  .dep-help { margin: 10px 0 0; font-size: .88em; }
+  .dep-table-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  .dep-table-head h2 { margin: 0; }
+  .dep-scroll { overflow-x: auto; max-height: none; }
+  .dep-table { min-width: 860px; }
+  .dep-table td, .dep-table th { vertical-align: middle; }
+  .dep-table .status { white-space: nowrap; }
+  .dep-small { display: block; color: var(--c-muted); font-size: .85em; overflow-wrap: anywhere; }
+  .dep-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .dep-actions form { margin: 0; }
+  .dep-actions button { margin: 0; }
+  .dep-empty td { padding: 26px 16px; }
+  .dep-filters { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; align-items: center; margin: 12px 0 14px; }
+  .dep-filters input, .dep-filters select, .dep-filters button { margin: 0; min-width: 0; height: 44px; box-sizing: border-box; }
+  @media (max-width: 900px) { .dep-filters { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .dep-filters input { grid-column: 1 / -1; } }
+</style>
+
+<div class="card dep-top">
+  <div>
+    <h1>Deploy WinAgent to PCs</h1>
+    <p class="muted">Install the agent on each PC. Each PC asks to connect, and the employee approves it on their dashboard.</p>
+  </div>
+  {% if not installer_ready %}
+    <p class="field-error">The installer file is not on this server yet. Build it with build.ps1 and ISCC, or set AGENT_INSTALLER_PATH.</p>
+  {% endif %}
+</div>
+
+<div class="five-up">
+  <div class="tiles">
+    <div class="tile"><span class="tile-value">{{ summary.employees }}</span><span class="tile-label">Total employees</span></div>
+    <div class="tile"><span class="tile-value">{{ summary.installed }}</span><span class="tile-label">Agents installed</span></div>
+    <div class="tile"><span class="tile-value">{{ summary.connected }}</span><span class="tile-label">Devices connected</span></div>
+    <div class="tile"><span class="tile-value">{{ summary.pending_setup }}</span><span class="tile-label">Devices pending setup</span></div>
+    <div class="tile"><span class="tile-value">{{ summary.monitoring_active }}</span><span class="tile-label">Monitoring active</span></div>
+  </div>
+</div>
+
+<div class="dep-row">
+  <div class="card">
+    <h2>Setup progress</h2>
+    <p class="muted">Each step fills in from the employee records, not from settings.</p>
+    <ol class="stages" aria-label="Setup progress">
+      {% for step in setup_steps %}
+        <li class="{% if step.done %}done{% elif step.current %}current{% endif %}"{% if step.current %} aria-current="step"{% endif %}>{{ step.label }}</li>
+      {% endfor %}
+    </ol>
+    <div class="dep-foot">
+      <p class="dep-help"><strong>What to do next:</strong> {% if summary.needs_link %}send a setup link to the employees marked <em>Send setup link</em> in the table.{% elif summary.waiting_approval %}ask the employees waiting for approval to open their dashboard and approve the PC.{% elif summary.ready %}click <em>Start monitoring</em> for each connected PC.{% elif summary.monitoring_active == summary.employees and summary.employees %}nothing. Every employee is monitored.{% else %}wait for the PCs to connect, then check the table.{% endif %}</p>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="dep-card-head">
+      <h2>Installer token</h2>
+      {% if token %}<span class="status ok">New token</span>{% elif has_token %}<span class="status ok">Token exists</span>{% else %}<span class="status wait">No token yet</span>{% endif %}
+    </div>
+    <p class="muted">Used only when IT installs WinAgent with the command below. Employees do not need it.</p>
+    {% if token %}
+      <p><strong>Copy this token now.</strong> It is shown only once.</p>
+      <div class="dep-copy">
+        <code class="dep-code" id="dep-token">{{ token }}</code>
+        <button type="button" class="secondary" data-copy="dep-token">Copy token</button>
+      </div>
+    {% elif has_token %}
+      <p class="muted">A token exists for your organization. It cannot be shown again. Make a new one if you lost it.</p>
+    {% else %}
+      <p class="muted">No token yet. Make one before IT installs WinAgent on any PC.</p>
+    {% endif %}
+    <div class="dep-foot">
+      <form method="post" action="{% url 'deployment_token_new' %}" data-confirm="Make a new token? The old token stops working for new installs. PCs that already connected are not affected.">
+        {% csrf_token %}
+        <p class="dep-help">Making a new token stops the old one from working for new installs. PCs that already connected are not affected.</p>
+        <button type="submit" class="secondary">{% if has_token %}Make a new token{% else %}Make a token{% endif %}</button>
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="dep-stack">
+<div class="card">
+  <div class="dep-card-head">
+    <h2>Install command</h2>
+    <span class="muted">Run on each PC as the signed-in user. No admin rights needed.</span>
+  </div>
+  <div class="dep-copy">
+    <code class="dep-code" id="dep-command">{{ installer_name }} /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP- /APIURL={{ api_url }} /ORGTOKEN=YOUR-TOKEN</code>
+    <button type="button" class="secondary" data-copy="dep-command">Copy command</button>
+  </div>
+  <div class="dep-links">
+    {% if installer_ready %}<a class="button" href="{% url 'deployment_installer' %}">Download {{ installer_name }}</a>{% endif %}
+    <a class="button" href="{% url 'deployment_script' %}">Download Deploy-WinAgent.ps1</a>
+  </div>
+  <p class="dep-help muted">Put both files in the same folder on the PC, then run <code>.\Deploy-WinAgent.ps1 -OrgToken YOUR-TOKEN</code>. Use /CAFILE=path\to\ca.pem only if the server uses a private certificate authority.</p>
+</div>
+
+<div class="card" id="employees">
+  <div class="dep-table-head">
+    <h2>Employees and devices</h2>
+    <span class="muted">{{ rows|length }} shown</span>
+  </div>
+  <form method="get" class="dep-filters" role="search">
+    <input type="search" name="q" value="{{ query }}" placeholder="Search name or email" aria-label="Search name or email">
+    <select name="install" aria-label="Installation">
+      {% for value, label in install_filters %}<option value="{{ value }}"{% if value == install %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <select name="connection" aria-label="Connection">
+      {% for value, label in connection_filters %}<option value="{{ value }}"{% if value == connection %} selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+    <div>
+      <button type="submit" class="secondary">Apply</button>
+      {% if filtered %}<a href="{{ request.path }}">Clear</a>{% endif %}
+    </div>
+  </form>
+
+  <div class="dep-scroll">
+    <table class="dep-table">
+      <thead>
+        <tr>
+          <th>Employee</th>
+          <th>PC</th>
+          <th>Installation</th>
+          <th>Connection</th>
+          <th>Monitoring</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+          <tr>
+            <td><a href="{% url 'dashboard_employee' row.pk %}">{{ row.name }}</a><span class="dep-small">{{ row.email }}</span></td>
+            <td>{% if row.device_name %}{{ row.device_name }}<span class="dep-small">{% if row.last_seen %}Last seen {{ row.last_seen|date:"j M H:i" }}{% else %}Never seen{% endif %}</span>{% else %}<span class="muted">None yet</span>{% endif %}</td>
+            <td><span class="status {% if row.install == 'completed' %}ok{% else %}badge-muted{% endif %}">{{ row.install_label }}</span></td>
+            <td><span class="status {{ row.stage_tone|default:'badge-muted' }}" title="{{ row.stage_help }}">{{ row.stage_label }}</span></td>
+            <td><span class="status {{ row.monitor_tone|default:'badge-muted' }}">{{ row.monitor_label }}</span><span class="dep-small">{{ row.next_text }}</span></td>
+            <td>
+              <div class="dep-actions">
+                {% if row.send_link %}
+                  <form method="post" action="{% url 'monitoring_setup_start' row.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="deployment">
+                    <button type="submit">Send setup link</button>
+                  </form>
+                {% elif row.resend_link %}
+                  <form method="post" action="{% url 'monitoring_setup_start' row.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="deployment">
+                    <button type="submit" class="secondary">Resend link</button>
+                  </form>
+                {% endif %}
+                {% if row.can_start %}
+                  <form method="post" action="{% url 'admin_monitoring_start' row.pk %}" data-confirm="Ask {{ row.name }} to approve monitoring on their dashboard?">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="deployment">
+                    <button type="submit">Start monitoring</button>
+                  </form>
+                {% endif %}
+                {% if not row.send_link and not row.resend_link and not row.can_start %}<span class="dep-note">No action needed</span>{% endif %}
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr class="dep-empty"><td colspan="6" class="muted">{% if filtered %}No employees match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.{% else %}No active employees yet. Add employees on the People page first.{% endif %}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</div>
+
+<script>
+  /* Copy buttons: copy the text of the element named in data-copy. Shows Copied for a moment. */
+  document.querySelectorAll('[data-copy]').forEach(function (button) {
+    button.addEventListener('click', function () {
+      var source = document.getElementById(button.getAttribute('data-copy'));
+      if (!source || !navigator.clipboard) return;
+      navigator.clipboard.writeText(source.textContent.trim()).then(function () {
+        var label = button.textContent;
+        button.textContent = 'Copied';
+        setTimeout(function () { button.textContent = label; }, 1500);
+      });
+    });
+  });
+</script>
+{% endblock %}

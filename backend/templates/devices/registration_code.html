@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}Registration code{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Registration code for {{ person.full_name }}</h1>
+  <p class="code">{{ code }}</p>
+  <p>This code works once and expires on {{ record.expires_at|date:"j M Y, H:i" }}. It is shown only now, so copy it before you leave this page.</p>
+  <p class="help">Normal setup does not use this code. The employee approves their PC on their dashboard instead.</p>
+  <p><a href="{% url 'person_detail' person.pk %}">Back to {{ person.full_name }}</a></p>
+</div>
+{% endblock %}

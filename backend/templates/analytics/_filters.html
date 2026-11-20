@@ -1,0 +1,13 @@
+<nav class="presets" aria-label="Quick ranges">
+  <a href="?preset=day" class="preset{% if preset == 'day' %} active{% endif %}">Today</a>
+  <a href="?preset=week" class="preset{% if preset == 'week' %} active{% endif %}">Last 7 days</a>
+</nav>
+<form method="get" class="filters">
+  {{ form.non_field_errors }}
+  {{ form.start.errors }}{{ form.end.errors }}
+  <label for="{{ form.start.id_for_label }}">From</label> {{ form.start }}
+  <label for="{{ form.end.id_for_label }}">To</label> {{ form.end }}
+  <button type="submit">Show</button>
+</form>
+<p class="muted">Showing {% if start == end %}{{ start|date:"j M Y" }}{% else %}{{ start|date:"j M Y" }} to {{ end|date:"j M Y" }}{% endif %}.
+Totals are built every few minutes, so the newest activity may not show yet.</p>

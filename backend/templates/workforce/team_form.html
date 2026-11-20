@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block title %}{% if team %}Edit team{% else %}New team{% endif %}{% endblock %}
+{% block crumbs %}<a href="{% url 'team_list' %}">Teams</a><span class="sep">/</span>{% if team %}Edit team{% else %}New team{% endif %}{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>{% if team %}Edit team{% else %}New team{% endif %}</h1>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save</button>
+    <a href="{% url 'team_list' %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

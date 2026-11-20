@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Departments{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Departments</h1>
+  {% include "includes/_list_bar.html" %}
+  <table>
+    {% include "includes/_list_head.html" %}
+    {% for department in listing.page %}
+      <tr><td>{{ department.name }}</td></tr>
+    {% empty %}
+      <tr><td class="muted">{% if listing.filtered %}No departments match your search. <a href="{{ request.path }}">Clear search</a>.{% else %}No departments yet.{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% include "includes/_list_footer.html" %}
+</div>
+<div class="card">
+  <h2>New department</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create</button>
+  </form>
+</div>
+{% endblock %}
