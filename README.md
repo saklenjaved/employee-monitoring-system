@@ -45,7 +45,7 @@ copy config.example.toml config.toml
 ## 3. Start the mock backend (terminal 1, leave it running)
 
 ```powershell
-.venv\Scripts\python -m mock_backend.server --cert backend\certs\cert.pem --key backend\certs\key.pem
+.venv\Scripts\python -m mock_backend.server --cert monitoring-platform\certs\cert.pem --key monitoring-platform\certs\key.pem
 ```
 
 It prints `Mock backend listening on https://127.0.0.1:8443/api/agent/v1/`. Stop it with Ctrl+C.

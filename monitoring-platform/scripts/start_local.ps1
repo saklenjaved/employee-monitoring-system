@@ -1,5 +1,5 @@
 # Starts the development server on http://127.0.0.1:8000/ and refuses to start if another server already uses the port.
-# Run from the windows-agent folder: .\backend\scripts\start_local.ps1
+# Run from the windows-agent folder: .\monitoring-platform\scripts\start_local.ps1
 #
 # Why: on Windows a second "runserver" can share the port with an old one, and then some requests go to the
 # old server (which may have old settings, for example mail). Stop the old server first.
@@ -9,7 +9,7 @@ $Server = Split-Path -Parent $PSScriptRoot          # ...\server
 $Python = Join-Path $Server ".venv\Scripts\python.exe"
 $Port = 8000
 
-if (-not (Test-Path $Python)) { throw "Virtual environment not found. Run .\backend\scripts\setup_local.ps1 first." }
+if (-not (Test-Path $Python)) { throw "Virtual environment not found. Run .\monitoring-platform\scripts\setup_local.ps1 first." }
 
 $listeners = netstat -ano | Select-String ":$Port\s" | Select-String "LISTENING"
 if ($listeners) {

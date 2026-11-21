@@ -11,7 +11,7 @@ build/
 screenshots/
 
 # Local demo artefacts (certificates, demo database, storage). Never commit.
-backend/certs/
+monitoring-platform/certs/
 mock_backend/data/
 demo_data/
 config.toml

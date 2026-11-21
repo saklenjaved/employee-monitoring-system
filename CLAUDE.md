@@ -3,7 +3,7 @@
 Python native Windows agent for the Employee Monitoring & Workforce Productivity System.
 
 - **Source of truth:** the Technical Architecture Document (TAD), "Windows Desktop Monitoring Agent" (working draft).
-- **Backend:** Django REST Framework over HTTPS. The Django platform is being built in `backend/` (see `docs/roadmap.md` and `backend/README.md`). The agent code in `winagent/` is finished and is not changed by the backend work.
+- **Backend:** Django REST Framework over HTTPS. The Django platform is being built in `monitoring-platform/` (see `docs/roadmap.md` and `monitoring-platform/README.md`). The agent code in `winagent/` is finished and is not changed by the backend work.
 - **Storage (backend side):** PostgreSQL for metadata, private Amazon S3 for screenshot images.
 
 ## Non-negotiables

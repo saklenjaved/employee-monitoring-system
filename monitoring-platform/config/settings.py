@@ -126,7 +126,7 @@ WSGI_APPLICATION = "config.wsgi.application"
 
 # Database: PostgreSQL (TAD section 2). SQLite is a quick local fallback only.
 # Render provides DATABASE_URL (postgres://user:password@host:port/name). Locally, select PostgreSQL
-# with DB_ENGINE=postgres (see backend/README.md).
+# with DB_ENGINE=postgres (see monitoring-platform/README.md).
 if os.environ.get("DATABASE_URL"):
     _url = urlparse(os.environ["DATABASE_URL"])
     DATABASES = {
@@ -275,7 +275,7 @@ DEVICE_ONLINE_SECONDS = 15 * 60
 # (scripts/run_https.ps1). Production must set AGENT_BASE_URL to the real HTTPS address.
 AGENT_BASE_URL = os.environ.get("AGENT_BASE_URL", "https://127.0.0.1:8443/api/agent/v1" if DEV_MODE else "")
 # The agent trusts the local development CA (rootCA.pem), which signs the server certificate.
-AGENT_CA_BUNDLE = os.environ.get("AGENT_CA_BUNDLE", "backend/certs/rootCA.pem" if DEV_MODE else "")
+AGENT_CA_BUNDLE = os.environ.get("AGENT_CA_BUNDLE", "monitoring-platform/certs/rootCA.pem" if DEV_MODE else "")
 
 # HTTPS everywhere outside development (TAD section 11).
 if not DEV_MODE:

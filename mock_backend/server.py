@@ -9,7 +9,7 @@ It is a demo, not a backend. Device tokens are stored as SHA-256 hashes. Event p
 stored in clear in the local demo database so you can inspect them with `python -m mock_backend.show`.
 
 Run:
-  python -m mock_backend.server --cert backend/certs/cert.pem --key backend/certs/key.pem
+  python -m mock_backend.server --cert monitoring-platform/certs/cert.pem --key monitoring-platform/certs/key.pem
 """
 
 from __future__ import annotations

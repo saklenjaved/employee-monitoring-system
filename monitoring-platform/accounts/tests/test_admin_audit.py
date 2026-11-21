@@ -64,7 +64,7 @@ class DevelopmentSettingsTests(SimpleTestCase):
     def load_settings(self, argv, **extra_env):
         env = {key: value for key, value in os.environ.items() if key not in ("DJANGO_DEBUG", "DJANGO_SECRET_KEY")}
         env.update(extra_env)
-        env["DJANGO_SKIP_ENV_FILE"] = "1"  # a local backend/.env must not change these checks
+        env["DJANGO_SKIP_ENV_FILE"] = "1"  # a local monitoring-platform/.env must not change these checks
         spec = importlib.util.spec_from_file_location("settings_under_test", self.SETTINGS)
         module = importlib.util.module_from_spec(spec)
         with mock.patch.dict(os.environ, env, clear=True), mock.patch.object(sys, "argv", argv):

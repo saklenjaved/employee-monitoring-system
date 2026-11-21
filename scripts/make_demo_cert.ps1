@@ -3,7 +3,7 @@
 # through [api] ca_bundle, and Chrome trusts it once it is added to the Windows certificate store.
 # Development only. Production uses a certificate from a public or company CA.
 #
-# Files (backend\certs, git-ignored, never commit):
+# Files (monitoring-platform\certs, git-ignored, never commit):
 #   rootCA.pem / rootCA-key.pem  the local CA. Keep the key private.
 #   cert.pem / key.pem           the server certificate and its key (used by run_https.ps1).
 #
@@ -11,7 +11,7 @@
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $PSScriptRoot
-$Certs = Join-Path $Root "backend\certs"
+$Certs = Join-Path $Root "monitoring-platform\certs"
 New-Item -ItemType Directory -Force -Path $Certs | Out-Null
 
 $openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source

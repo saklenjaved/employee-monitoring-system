@@ -5,7 +5,7 @@
 # Must be https://. The local mock uses a self-signed certificate: point ca_bundle at it (verification stays on).
 base_url = "https://127.0.0.1:8443/api/agent/v1"
 timeout_seconds = 10
-ca_bundle = "backend/certs/cert.pem"
+ca_bundle = "monitoring-platform/certs/cert.pem"
 
 [registration]
 # Local test code accepted by mock_backend/server.py. Not for production.

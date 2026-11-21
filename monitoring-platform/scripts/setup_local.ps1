@@ -1,9 +1,9 @@
 # Sets up the Django platform on this computer for development: virtual environment, packages,
 # a local database with the migrations applied, and demo data.
-# Run from the windows-agent folder: .\backend\scripts\setup_local.ps1
+# Run from the windows-agent folder: .\monitoring-platform\scripts\setup_local.ps1
 #
-# It never touches backend\db.sqlite3, the database that holds real accounts. Migrate that one
-# only after a backup and an explicit decision (see backend\README.md).
+# It never touches monitoring-platform\db.sqlite3, the database that holds real accounts. Migrate that one
+# only after a backup and an explicit decision (see monitoring-platform\README.md).
 #   -Fresh   delete the local database and build it again
 #   -Test    run the test suite at the end
 

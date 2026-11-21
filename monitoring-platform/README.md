@@ -125,22 +125,22 @@ Decisions marked "default, to confirm" (Phase 1):
 One command sets up everything for local development: the virtual environment (Python 3.14), the packages, a local database with all migrations applied, and demo data. Run it from the `windows-agent` folder:
 
 ```powershell
-.\backend\scripts\setup_local.ps1
+.\monitoring-platform\scripts\setup_local.ps1
 ```
 
-Add `-Test` to run the test suite at the end, or `-Fresh` to delete the demo database and build it again. The script builds the demo data in `backend\demo.sqlite3`. It does not touch `backend\db.sqlite3`.
+Add `-Test` to run the test suite at the end, or `-Fresh` to delete the demo database and build it again. The script builds the demo data in `monitoring-platform\demo.sqlite3`. It does not touch `monitoring-platform\db.sqlite3`.
 
 Then start the server. Use this script, which refuses to start while another server already uses port 8000:
 
 ```powershell
-.\backend\scripts\start_local.ps1
+.\monitoring-platform\scripts\start_local.ps1
 ```
 
 Run only one server at a time. On Windows, a second `runserver` can share the port with an old one, and then some requests reach the old server, which may still have old settings (for example old mail settings). If the script reports that port 8000 is in use, close the terminal of the old server first.
 
 Password reset: the server allows three reset emails per address per hour. A fourth request is skipped, and the terminal shows `password reset skipped`. Restarting the server resets that counter. The terminal also shows `password reset email sent` for each email.
 
-Open http://127.0.0.1:8000/ and sign in with your own account. The server uses `backend\db.sqlite3`, which holds the real accounts (its three accounts were migrated on 2026-11-03; a backup is in `backend\backups`).
+Open http://127.0.0.1:8000/ and sign in with your own account. The server uses `monitoring-platform\db.sqlite3`, which holds the real accounts (its three accounts were migrated on 2026-11-03; a backup is in `monitoring-platform\backups`).
 
 To look at the demo data instead, start the server with its database set for that session only:
 
@@ -164,7 +164,7 @@ The demo data is fictional and lives only in `demo.sqlite3`.
 
 ### The database `db.sqlite3`
 
-`backend\db.sqlite3` holds the real accounts. It is migrated to the current code. Before any future migration, back it up first (copy the file to `backend\backups`) and migrate it on purpose. The setup script refuses to use it.
+`monitoring-platform\db.sqlite3` holds the real accounts. It is migrated to the current code. Before any future migration, back it up first (copy the file to `monitoring-platform\backups`) and migrate it on purpose. The setup script refuses to use it.
 
 ## Run the tests
 
@@ -194,17 +194,17 @@ The agent only talks HTTPS, and `runserver` is plain HTTP. Keep `runserver` for 
 
 ```powershell
 cd D:\my_projects\windows-agent
-.\backend\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements-dev.txt   # only the first time
-.\backend\scripts\run_https.ps1
+.\monitoring-platform\.venv\Scripts\Activate.ps1
+python -m pip install -r monitoring-platform\requirements-dev.txt   # only the first time
+.\monitoring-platform\scripts\run_https.ps1
 ```
 
-The script creates a local development certificate authority and a server certificate in `backend\certs\` with `scripts\make_demo_cert.ps1`, when they are missing or the old certificate is not signed by that CA. The server certificate covers `localhost`, `127.0.0.1` and `::1`. It serves the API at `https://127.0.0.1:8443/api/agent/v1/`. Ctrl+C stops it and the whole process tree it started. The script refuses to start while anything already listens on port 8443.
+The script creates a local development certificate authority and a server certificate in `monitoring-platform\certs\` with `scripts\make_demo_cert.ps1`, when they are missing or the old certificate is not signed by that CA. The server certificate covers `localhost`, `127.0.0.1` and `::1`. It serves the API at `https://127.0.0.1:8443/api/agent/v1/`. Ctrl+C stops it and the whole process tree it started. The script refuses to start while anything already listens on port 8443.
 
 **Trust the local CA once (Chrome and the Windows agent).** Run this in PowerShell as your own user (no administrator rights needed). It adds only the development CA to your Windows user store:
 
 ```powershell
-certutil -user -addstore Root "D:\my_projects\windows-agent\backend\certs\rootCA.pem"
+certutil -user -addstore Root "D:\my_projects\windows-agent\monitoring-platform\certs\rootCA.pem"
 ```
 
 Chrome reads the Windows store, so the dashboard at `https://127.0.0.1:8443/` then loads without a warning. Restart Chrome after adding it. Never put `rootCA-key.pem` anywhere else; it can sign certificates for your machine.
@@ -213,7 +213,7 @@ The agent does not use the Windows store. Its `ca_bundle` must point at `rootCA.
 
 ```toml
 base_url = "https://127.0.0.1:8443/api/agent/v1"
-ca_bundle = "backend/certs/rootCA.pem"
+ca_bundle = "monitoring-platform/certs/rootCA.pem"
 ```
 
 An agent installed earlier with `ca_bundle` set to `cert.pem` must be updated to `rootCA.pem`, or reinstalled with `/CAFILE=<path to rootCA.pem>`. Verification stays on in both cases.
@@ -255,7 +255,7 @@ All secrets come from environment variables:
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts. Default `localhost,127.0.0.1`. |
 | `DB_ENGINE` | `postgres` or empty for SQLite. |
 | `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP settings for invitation and password-reset emails. Set `EMAIL_HOST` to send real mail (Gmail for local development: see `.env.example`). Without it, sending fails and the app shows that the email could not be sent (development shows a startup warning). Outside development, `EMAIL_HOST` and a real `DEFAULT_FROM_EMAIL` are required. |
-| `.env` file | Optional. Put local values such as the Gmail app password in `backend/.env` (copy `.env.example`). It is git-ignored. Real environment variables take precedence. |
+| `.env` file | Optional. Put local values such as the Gmail app password in `monitoring-platform/.env` (copy `.env.example`). It is git-ignored. Real environment variables take precedence. |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL connection. The development defaults match `docker-compose.yml`. |
 
 Without `DJANGO_DEBUG=1` and without a secret key, the server refuses to start. In production mode, HTTPS redirect and secure cookies are on.
@@ -293,4 +293,4 @@ The standing rules are in `../.claude/rules/` (tenant isolation, RBAC, audit, AP
 
 ## Screenshot storage in development (local disk)
 
-For now, development keeps screenshot images on this computer instead of in S3: `backend/screenshot_data/` (`SCREENSHOT_LOCAL_DIR` changes it). No S3 stand-in is needed. `python manage.py init_storage` creates the folder. The agent still uploads through a signed, expiring link locked to one file, size and SHA-256, but the Django server itself receives the file and sends it back (`/storage/upload/...` and `/storage/file/...`). That is a development-only exception to "Django never handles image bytes". `LocalStorage` refuses to start outside development, and production keeps using S3. Set `SCREENSHOT_STORAGE=screenshots.storage.S3Storage` to go back to the S3 stand-in.
+For now, development keeps screenshot images on this computer instead of in S3: `monitoring-platform/screenshot_data/` (`SCREENSHOT_LOCAL_DIR` changes it). No S3 stand-in is needed. `python manage.py init_storage` creates the folder. The agent still uploads through a signed, expiring link locked to one file, size and SHA-256, but the Django server itself receives the file and sends it back (`/storage/upload/...` and `/storage/file/...`). That is a development-only exception to "Django never handles image bytes". `LocalStorage` refuses to start outside development, and production keeps using S3. Set `SCREENSHOT_STORAGE=screenshots.storage.S3Storage` to go back to the S3 stand-in.

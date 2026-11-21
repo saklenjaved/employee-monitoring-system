@@ -11,7 +11,7 @@ from django.core.checks import Error, Warning, register
 def invitation_email_is_configured(app_configs, **kwargs):
     if settings.EMAIL_HOST and not settings.DEFAULT_FROM_EMAIL.endswith(".invalid"):
         return []
-    hint = "Set the EMAIL_HOST and DEFAULT_FROM_EMAIL environment variables (see backend/.env.example)."
+    hint = "Set the EMAIL_HOST and DEFAULT_FROM_EMAIL environment variables (see monitoring-platform/.env.example)."
     if settings.DEV_MODE:
         return [Warning("Invitation emails cannot be sent yet.", hint=hint, id="accounts.W001")]
     return [Error("Invitation emails cannot be sent.", hint=hint, id="accounts.E001")]

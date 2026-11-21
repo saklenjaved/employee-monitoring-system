@@ -12,7 +12,7 @@
     dist\winagent\winagent.exe              the agent (one-folder build)
     dist\winagent-<version>.zip             the one-folder build, zipped
     dist\WinAgentSetup-<version>.exe        the installer
-    backend\agent_dist\WinAgentSetup.exe     the same installer, where the Admin Deployment page serves it
+    monitoring-platform\agent_dist\WinAgentSetup.exe     the same installer, where the Admin Deployment page serves it
 
   Code signing (optional). Set these environment variables to sign winagent.exe and the installer:
     PFX_PATH        path to the code signing certificate (.pfx)
@@ -70,6 +70,12 @@ if (-not (Test-Path $Python)) { Stop-Build "Create the virtualenv first: py -3.1
 $Version = (& $Python -c "import winagent; print(winagent.__version__)").Trim()
 if (-not $Version) { Stop-Build "Could not read the agent version" }
 Write-Host "Building winagent $Version"
+
+# The installer refuses to run when its built-in CA file is missing, and a silent install hides why.
+# Check the path now, so a moved certificate stops the build instead of producing a broken installer.
+if ($env:WINAGENT_CA_FILE -and -not (Test-Path -LiteralPath $env:WINAGENT_CA_FILE -PathType Leaf)) {
+    Stop-Build "WINAGENT_CA_FILE is set to '$env:WINAGENT_CA_FILE', but that file does not exist"
+}
 
 Invoke-Native "PyInstaller check (pip install -e `".[dev]`")" { & $Python -m PyInstaller --version | Out-Null }
 
@@ -156,12 +162,12 @@ Sign-File $Installer
 
 # --- 5. Copy for the server and package --------------------------------------------------------
 
-$ServerDir = Join-Path $Root "backend\agent_dist"
+$ServerDir = Join-Path $Root "monitoring-platform\agent_dist"
 New-Item -ItemType Directory -Force -Path $ServerDir | Out-Null
 $ServerCopy = Join-Path $ServerDir "WinAgentSetup.exe"
 Copy-Item -LiteralPath $Installer -Destination $ServerCopy -Force
 $InstallerHash = (Get-FileHash $Installer -Algorithm SHA256).Hash
-if ((Get-FileHash $ServerCopy -Algorithm SHA256).Hash -ne $InstallerHash) { Stop-Build "The copy in backend\agent_dist does not match the installer" }
+if ((Get-FileHash $ServerCopy -Algorithm SHA256).Hash -ne $InstallerHash) { Stop-Build "The copy in monitoring-platform\agent_dist does not match the installer" }
 
 $Zip = Join-Path $Root "dist\winagent-$Version.zip"
 if (Test-Path $Zip) { Remove-Item $Zip }

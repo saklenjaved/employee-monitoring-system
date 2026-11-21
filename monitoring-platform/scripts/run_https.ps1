@@ -1,5 +1,5 @@
 # Serves the Django API over HTTPS on this computer, for the Windows agent.
-# Run from anywhere: .\backend\scripts\run_https.ps1
+# Run from anywhere: .\monitoring-platform\scripts\run_https.ps1
 # Use it in a second PowerShell window next to "python manage.py runserver" (plain HTTP, for the browser).
 # Stop with Ctrl+C. The script also stops the Hypercorn process tree it started.
 
@@ -7,12 +7,12 @@ $ErrorActionPreference = "Stop"
 $Server = Split-Path -Parent $PSScriptRoot          # ...\server
 $Root = Split-Path -Parent $Server                   # ...\windows-agent
 $Python = Join-Path $Server ".venv\Scripts\python.exe"
-$Certs = Join-Path $Root "backend\certs"
+$Certs = Join-Path $Root "monitoring-platform\certs"
 $Cert = Join-Path $Certs "cert.pem"
 $Key = Join-Path $Certs "key.pem"
 $Port = 8443
 
-if (-not (Test-Path $Python)) { throw "Virtual environment not found. Create it in backend\.venv first (see backend\README.md)." }
+if (-not (Test-Path $Python)) { throw "Virtual environment not found. Create it in monitoring-platform\.venv first (see monitoring-platform\README.md)." }
 
 $openssl = (Get-Command openssl -ErrorAction SilentlyContinue).Source
 if (-not $openssl) { $openssl = "C:\Program Files\Git\usr\bin\openssl.exe" }

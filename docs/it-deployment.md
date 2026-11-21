@@ -51,7 +51,7 @@ In the Admin dashboard, open **Deployment** in the sidebar. It shows the install
 
 ## Build and code signing
 
-`build.ps1` does the whole build: tests, PyInstaller, Inno Setup, and a copy of the installer to `backend\agent_dist\WinAgentSetup.exe`, where the Admin Deployment page serves it (to logged-in Admins only). `build.ps1 -CheckOnly` checks the tools and signing settings without building.
+`build.ps1` does the whole build: tests, PyInstaller, Inno Setup, and a copy of the installer to `monitoring-platform\agent_dist\WinAgentSetup.exe`, where the Admin Deployment page serves it (to logged-in Admins only). `build.ps1 -CheckOnly` checks the tools and signing settings without building.
 
 To sign `winagent.exe` and the installer, set these environment variables before the build:
 
