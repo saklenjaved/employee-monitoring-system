@@ -8,7 +8,8 @@ build/
 *.egg-info/
 # Local runtime data; never commit credentials or screenshots
 *.bin
-screenshots/
+# Only a screenshots folder at the top of the repo. The app folders named screenshots/ must be committed.
+/screenshots/
 
 # Local demo artefacts (certificates, demo database, storage). Never commit.
 monitoring-platform/certs/
