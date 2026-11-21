@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Screenshot exclusions{% endblock %}
+{% block crumbs %}<a href="{% url 'screenshot_settings' %}">Screenshot settings</a><span class="sep">/</span>Exclusions{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Screenshot exclusions</h1>
+  <p class="muted">No screenshots are taken for the teams and employees listed here.</p>
+  <table>
+    <tr><th>Excluded</th><th></th></tr>
+    {% for exclusion in exclusions %}
+      <tr>
+        <td>{% if exclusion.team %}Team: {{ exclusion.team.name }}{% else %}Employee: {{ exclusion.user.full_name }}{% endif %}</td>
+        <td>
+          <form method="post" action="{% url 'screenshot_exclusion_remove' exclusion.pk %}">
+            {% csrf_token %}<button type="submit" class="secondary">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="2" class="muted">Nobody is excluded.</td></tr>
+    {% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>Add an exclusion</h2>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Exclude</button>
+  </form>
+</div>
+{% endblock %}

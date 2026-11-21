@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Screenshot settings{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Screenshot settings{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Screenshot settings</h1>
+  <p class="muted">
+    {% if policy.is_active %}Screenshots are ON.{% elif policy.is_configured %}Screenshots are off.{% else %}Screenshots are off until you choose the interval, the retention period and the blur level.{% endif %}
+    Screenshots are only taken during the monitoring hours, and never for <a href="{% url 'screenshot_exclusions' %}">excluded</a> teams or employees. Employees cannot see screenshots.
+  </p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save &amp; apply settings</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Which PCs have these settings</h2>
+  {% if device_rows %}
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Employee</th><th>Status</th><th>Interval</th><th>Last screenshot</th><th>Upload</th></tr></thead>
+        <tbody>
+          {% for row in device_rows %}
+            <tr>
+              <td>{{ row.name }}</td>
+              <td>{{ row.state }}</td>
+              <td>{% if row.interval %}every {{ row.interval }} s{% else %}-{% endif %}</td>
+              <td>{% if row.last_when %}{{ row.last_when|date:"j M Y, H:i" }} IST{% else %}<span class="muted">None yet</span>{% endif %}</td>
+              <td>{% if row.last %}{{ row.last.get_status_display }}{% if row.last.error_code %} ({{ row.last.error_code }}){% endif %}{% else %}<span class="muted">-</span>{% endif %}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% else %}
+    <p class="muted">No PCs are registered yet. Install WinAgent on an employee's PC to see its screenshot status here.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% load tz %}
+{% block title %}Screenshot{% endblock %}
+{% block crumbs %}<a href="{% url 'screenshot_list' %}">Screenshots</a><span class="sep">/</span>Screenshot details{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Screenshot</h1>
+  <p>{{ shot.user.full_name }} &middot; {% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:"j M Y H:i:s" }}{% endtimezone %} IST &middot; {{ shot.device.name }}</p>
+  {% if shot.status == "uploaded" %}
+    <p class="muted">Showing this image is recorded in the audit log.</p>
+    <p><img src="{% url 'screenshot_image' shot.pk %}" alt="Screenshot of {{ shot.user.full_name }}" style="max-width:100%; border:1px solid var(--c-border)"></p>
+    {% if can_download %}
+      <p><a class="button" href="{% url 'screenshot_download' shot.pk %}">Download</a> <span class="muted">Downloads are recorded too.</span></p>
+    {% else %}
+      <p class="muted">You do not have permission to download screenshots.</p>
+    {% endif %}
+  {% else %}
+    <p>This screenshot has no image: {{ shot.get_status_display }}{% if shot.error_code %} ({{ shot.error_code }}){% endif %}.</p>
+  {% endif %}
+  {% if can_delete %}
+    <form method="post" action="{% url 'screenshot_delete' shot.pk %}" onsubmit="return confirm('Delete this screenshot? The image cannot be recovered.');">
+      {% csrf_token %}
+      <button type="submit" class="secondary">Delete screenshot</button>
+      <span class="muted">Only Admins can delete. The deletion is recorded in the audit log.</span>
+    </form>
+  {% endif %}
+  <p><a href="{% url 'screenshot_list' %}">Back to the list</a></p>
+</div>
+{% endblock %}

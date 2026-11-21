@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% load static tz %}
+{% block title %}Screenshots{% endblock %}
+{% block content %}
+<style>
+  .gal-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
+  .gal-head h1 { margin: 0 0 4px; }
+  .gal-head p { margin: 0; }
+  .gal-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin: 0 0 14px; font-size: .9em; }
+  .gal-count { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: var(--c-surface); border: 1px solid var(--c-border); font-weight: 600; font-size: .9em; white-space: nowrap; }
+  .gal-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px 14px; align-items: end; }
+  .gal-filters .field-wide { grid-column: span 2; }
+  .gal-filters label { display: block; font-size: .8em; font-weight: 700; color: var(--c-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 5px; }
+  .gal-filters select, .gal-filters input { width: 100%; min-width: 0; }
+  .gal-filters .gal-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .gal-filters .gal-actions a { font-size: .9em; }
+  .gal-note { margin: 14px 0 0; font-size: .86em; }
+  #gallery-wrap { margin-top: 18px; transition: opacity .15s ease; }
+  #gallery-wrap.htmx-request { opacity: .55; }
+  .gal-error { display: none; margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--c-danger-bg); color: var(--c-danger); font-weight: 600; }
+  .gal-error.is-visible { display: block; }
+  .gal-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 18px; }
+  .shot-card {
+    min-width: 0; display: flex; flex-direction: column; background: var(--c-surface); border: 1px solid var(--c-border);
+    border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm);
+    transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+  }
+  .shot-card:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); border-color: color-mix(in srgb, var(--c-primary) 30%, var(--c-border)); }
+  .shot-thumb {
+    position: relative; display: block; width: 100%; aspect-ratio: 16 / 10; padding: 0; margin: 0; border: 0; border-radius: 0;
+    background: linear-gradient(90deg, var(--c-surface-2) 25%, var(--c-border) 37%, var(--c-surface-2) 63%) 0 0 / 400% 100%;
+    animation: shimmer 1.4s ease infinite; cursor: zoom-in; overflow: hidden; box-shadow: none; transform: none;
+  }
+  button.shot-thumb:hover { transform: none; box-shadow: none; filter: none; }
+  .shot-thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: 0; transition: opacity .3s ease, transform .4s ease; }
+  .shot-thumb img.is-loaded { opacity: 1; }
+  .shot-card:hover .shot-thumb img.is-loaded { transform: scale(1.03); }
+  .shot-thumb.is-empty, .shot-thumb.is-broken { animation: none; background: var(--c-surface-2); display: flex; align-items: center; justify-content: center; padding: 12px; text-align: center; color: var(--c-muted); font-size: .88em; cursor: default; }
+  .shot-thumb .thumb-fallback { display: none; }
+  .shot-thumb.is-empty { flex-direction: column; gap: 4px; }
+  .shot-err { display: block; font-family: ui-monospace, Consolas, monospace; font-size: .9em; color: var(--c-danger); }
+  .shot-thumb.is-broken .thumb-fallback { display: block; }
+  .shot-thumb.is-broken img { display: none; }
+  .shot-thumb:focus-visible { outline: 3px solid color-mix(in srgb, var(--c-primary) 45%, transparent); outline-offset: -3px; }
+  @keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+  .shot-meta { padding: 12px 14px 14px; display: grid; gap: 6px; min-width: 0; }
+  .shot-name { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shot-sub { font-size: .84em; color: var(--c-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .shot-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+  .shot-row > .shot-sub { min-width: 0; flex: 1; }
+  .shot-row > .status { flex-shrink: 0; }
+  .gal-empty { text-align: center; padding: 48px 20px; }
+  .gal-empty h2 { margin-bottom: 6px; }
+  .gal-empty p { margin: 0 auto 14px; max-width: 46ch; }
+  .shot-dialog { border: 0; padding: 0; border-radius: var(--radius-lg); background: var(--c-surface); color: var(--c-text); width: min(1080px, 96vw); max-height: 94vh; box-shadow: var(--shadow-lift); }
+  .shot-dialog::backdrop { background: rgba(11, 16, 32, .62); backdrop-filter: blur(3px); }
+  .shot-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 18px 12px; border-bottom: 1px solid var(--c-border); }
+  .shot-dialog-head h2 { margin: 0 0 2px; font-size: 1.1em; overflow-wrap: anywhere; }
+  .shot-dialog-head p { margin: 0; font-size: .9em; }
+  .shot-dialog-stage { position: relative; display: flex; align-items: center; justify-content: center; min-height: 200px; padding: 14px; background: var(--c-surface-2); }
+  .shot-dialog-stage img { display: block; max-width: 100%; max-height: 70vh; width: auto; height: auto; object-fit: contain; border-radius: 8px; }
+  .shot-dialog-stage .stage-note { position: absolute; color: var(--c-muted); font-size: .92em; }
+  .shot-dialog-foot { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 18px; border-top: 1px solid var(--c-border); }
+  .shot-dialog-foot .spacer { flex: 1; }
+  .shot-dialog-foot .button.secondary { background: var(--c-secondary); box-shadow: none; }
+  @media (max-width: 900px) {
+    .gal-filters .field-wide, .gal-filters .gal-actions { grid-column: 1 / -1; }
+  }
+  @media (max-width: 600px) {
+    .gal-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .gal-filters .field-wide, .gal-filters .gal-actions { grid-column: 1 / -1; }
+    .gal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .shot-meta { padding: 10px 10px 12px; }
+    .shot-dialog { width: 100vw; max-width: 100vw; max-height: 100vh; height: 100%; margin: 0; border-radius: 0; }
+    .shot-dialog-stage img { max-height: 62vh; }
+    .shot-dialog-foot .spacer { display: none; }
+  }
+</style>
+
+<div class="gal-head">
+  <div>
+    <h1>Screenshots</h1>
+    <p class="muted">Captured screenshots from employee PCs. Every image you open is recorded in the audit log.</p>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" action="{% url 'screenshot_list' %}" class="gal-filters" id="gallery-filters"
+        hx-get="{% url 'screenshot_list' %}"
+        hx-trigger="change, submit, input changed delay:350ms from:#shot-q"
+        hx-target="#gallery-wrap" hx-select="#gallery-wrap" hx-swap="outerHTML"
+        hx-push-url="true" hx-indicator="#gallery-wrap">
+    <div class="field-wide">
+      <label for="shot-q">Search employee</label>
+      <input type="search" id="shot-q" name="q" value="{{ form.q.value|default:'' }}" placeholder="Name, email or employee ID" autocomplete="off">
+    </div>
+    <div>
+      <label for="{{ form.employee.id_for_label }}">Employee</label>
+      {{ form.employee }}
+    </div>
+    <div>
+      <label for="{{ form.team.id_for_label }}">Team</label>
+      {{ form.team }}
+    </div>
+    <div>
+      <label for="{{ form.department.id_for_label }}">Department</label>
+      {{ form.department }}
+    </div>
+    <div>
+      <label for="{{ form.status.id_for_label }}">Status</label>
+      {{ form.status }}
+    </div>
+    <div>
+      <label for="{{ form.start.id_for_label }}">From</label>
+      {{ form.start }}
+    </div>
+    <div>
+      <label for="{{ form.end.id_for_label }}">To</label>
+      {{ form.end }}
+    </div>
+    <div>
+      <label for="{{ form.order.id_for_label }}">Sort</label>
+      {{ form.order }}
+    </div>
+    <div class="gal-actions">
+      <button type="submit">Apply</button>
+      <a href="{% url 'screenshot_list' %}">Reset filters</a>
+    </div>
+  </form>
+  {{ form.non_field_errors }}{{ form.start.errors }}{{ form.end.errors }}
+  <p class="muted gal-note">Dates are days in the organization's time zone. Choose at most 92 days.</p>
+  <p class="gal-error" id="gallery-error" role="alert">Screenshots could not be loaded. Check your connection and try again.</p>
+
+  <div id="gallery-wrap">
+    {% if page.paginator.count %}
+      <div class="gal-summary" aria-live="polite">
+        <span class="gal-count">{{ page.paginator.count }} screenshot{{ page.paginator.count|pluralize }}</span>
+        <span class="muted">Showing {{ shown_from }}&ndash;{{ shown_to }}</span>
+      </div>
+      <ul class="gal-grid">
+        {% for shot in page %}
+          <li class="shot-card">
+            {% if shot.status == "uploaded" %}
+              <button type="button" class="shot-thumb"
+                      data-src="{% url 'screenshot_image' shot.pk %}"
+                      data-name="{{ shot.user.full_name|default:shot.user.email }}"
+                      data-time="{% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:'j M Y, H:i' }}{% endtimezone %} IST"
+                      data-device="{{ shot.device.name }}"
+                      data-status="{{ shot.get_status_display }}"
+                      data-detail="{% url 'screenshot_detail' shot.pk %}"
+                      data-download="{% if can_download %}{% url 'screenshot_download' shot.pk %}{% endif %}"
+                      aria-label="Open screenshot of {{ shot.user.full_name|default:shot.user.email }}, {% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:'j M Y H:i' }}{% endtimezone %} IST">
+                <img src="{% url 'screenshot_image' shot.pk %}" alt="" loading="lazy" decoding="async"
+                     width="{{ shot.width|default:1600 }}" height="{{ shot.height|default:1000 }}">
+                <span class="thumb-fallback">Image could not be loaded</span>
+              </button>
+            {% else %}
+              <div class="shot-thumb is-empty">
+                <span>{{ shot.get_status_display }}</span>
+                {% if shot.error_code %}<span class="shot-err">{{ shot.error_code }}</span>{% endif %}
+              </div>
+            {% endif %}
+            <div class="shot-meta">
+              <div class="shot-row">
+                <span class="shot-name">{{ shot.user.full_name|default:shot.user.email }}</span>
+              </div>
+              <div class="shot-sub">{% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:"j M Y, H:i" }}{% endtimezone %} IST</div>
+              <div class="shot-row">
+                <span class="shot-sub">{{ shot.device.name }}{% if shot.employee_code %} &middot; {{ shot.employee_code }}{% endif %}</span>
+                {% if shot.status == "uploaded" %}
+                  <span class="status ok">Uploaded</span>
+                {% elif shot.status == "failed" %}
+                  <span class="status bad">Failed</span>
+                {% else %}
+                  <span class="status wait">Waiting</span>
+                {% endif %}
+              </div>
+            </div>
+          </li>
+        {% endfor %}
+      </ul>
+
+      {% if page.paginator.num_pages > 1 %}
+        <nav class="pager" aria-label="Pages" style="justify-content:center; margin-top:22px;">
+          {% if page.has_previous %}
+            <a class="button secondary" href="?{{ query }}&page={{ page.previous_page_number }}" hx-get="?{{ query }}&page={{ page.previous_page_number }}" hx-target="#gallery-wrap" hx-select="#gallery-wrap" hx-swap="outerHTML" hx-push-url="true">Previous</a>
+          {% endif %}
+          <span class="muted">Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+          {% if page.has_next %}
+            <a class="button" href="?{{ query }}&page={{ page.next_page_number }}" hx-get="?{{ query }}&page={{ page.next_page_number }}" hx-target="#gallery-wrap" hx-select="#gallery-wrap" hx-swap="outerHTML" hx-push-url="true">Next</a>
+          {% endif %}
+        </nav>
+      {% endif %}
+    {% else %}
+      <div class="gal-summary" aria-live="polite"><span class="gal-count">0 screenshots</span></div>
+      <div class="gal-empty">
+        {% if query %}
+          <h2>No screenshots match these filters</h2>
+          <p class="muted">Try another name, a wider date range, or a different status.</p>
+          <a class="button secondary" href="{% url 'screenshot_list' %}">Reset filters</a>
+        {% else %}
+          <h2>No screenshots yet</h2>
+          <p class="muted">Screenshots appear here after an employee PC with screenshots turned on uploads them.</p>
+          {% if user.role == "admin" %}<a class="button secondary" href="{% url 'screenshot_settings' %}">Open screenshot settings</a>{% endif %}
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<dialog id="shot-preview" class="shot-dialog" aria-labelledby="shot-preview-title">
+  <div class="shot-dialog-head">
+    <div>
+      <h2 id="shot-preview-title"></h2>
+      <p class="muted" id="shot-preview-meta"></p>
+    </div>
+    <button type="button" class="icon-btn" data-dialog-close aria-label="Close preview">&times;</button>
+  </div>
+  <div class="shot-dialog-stage">
+    <span class="stage-note" id="shot-preview-note">Loading image&hellip;</span>
+    <img id="shot-preview-img" alt="" hidden>
+  </div>
+  <div class="shot-dialog-foot">
+    <button type="button" class="secondary" id="shot-prev">Previous</button>
+    <span class="muted" id="shot-preview-pos"></span>
+    <button type="button" class="secondary" id="shot-next">Next</button>
+    <span class="spacer"></span>
+    <a class="button secondary" id="shot-detail" href="#">Details</a>
+    {% if can_download %}<a class="button" id="shot-download" href="#">Download</a>{% endif %}
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script src="{% static 'js/gallery.js' %}"></script>
+{% endblock %}
