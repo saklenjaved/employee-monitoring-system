@@ -268,14 +268,17 @@ Create a PostgreSQL database and a Python web service from the Git repository:
 |---|---|
 | Root directory | `monitoring-platform` |
 | Build command | `pip install -r requirements.txt && python manage.py collectstatic --noinput` |
-| Pre-deploy command | `python manage.py migrate --noinput` |
-| Start command | `hypercorn config.asgi:application --bind 0.0.0.0:$PORT` |
+| Pre-deploy command | Not available on the Free plan. Leave empty. |
+| Start command | `sh -c "python manage.py migrate --noinput && python manage.py create_initial_superadmin && hypercorn config.asgi:application --bind 0.0.0.0:$PORT"` |
 | Health check path | `/login/` |
+
+On the Free plan the start command runs the migrations and the Super Admin step before the server starts. Both are safe to repeat: `migrate` only applies changes that have not run yet, and `create_initial_superadmin` does nothing once a Super Admin exists. After the first successful start, delete `INITIAL_SUPERADMIN_PASSWORD` from Render, so that a Super Admin deleted later is not recreated with a known password.
 
 Environment variables for the web service:
 - `DJANGO_DEBUG=0` and `DJANGO_SECRET_KEY` (a long random value).
 - `DATABASE_URL`: the database's internal connection string (Render fills it in).
 - `AGENT_BASE_URL=https://<service>.onrender.com/api/agent/v1` (the address the agent installer uses).
+- `INITIAL_SUPERADMIN_EMAIL` and `INITIAL_SUPERADMIN_PASSWORD`: create the first Super Admin without a shell. The step runs only when no Super Admin exists, so it never makes a duplicate. Optional `INITIAL_SUPERADMIN_NAME`. After the first successful deploy, delete `INITIAL_SUPERADMIN_PASSWORD` from Render.
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`.
 - `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` for screenshots (private bucket).
 
