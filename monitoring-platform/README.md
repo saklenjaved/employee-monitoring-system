@@ -266,7 +266,7 @@ Create a PostgreSQL database and a Python web service from the Git repository:
 
 | Setting | Value |
 |---|---|
-| Root directory | `backend` |
+| Root directory | `monitoring-platform` |
 | Build command | `pip install -r requirements.txt && python manage.py collectstatic --noinput` |
 | Pre-deploy command | `python manage.py migrate --noinput` |
 | Start command | `hypercorn config.asgi:application --bind 0.0.0.0:$PORT` |

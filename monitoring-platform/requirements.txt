@@ -4,3 +4,4 @@ psycopg[binary]>=3.2
 tzdata  # time zone data for Windows
 boto3>=1.35  # signed upload and download links for the private S3 bucket (TAD section 7)
 hypercorn>=0.17  # production web server (ASGI)
+whitenoise>=6.7  # serves the collected static files (CSS, JavaScript) when DEBUG is off
