@@ -55,7 +55,7 @@ class MonitoringConfig:
     sync_interval_seconds: int = 60
     heartbeat_interval_seconds: int = 300
     # Admin changes (for example turning screenshots on) reach the PC at the next refresh, so keep this short.
-    policy_refresh_seconds: int = 300
+    policy_refresh_seconds: int = 60  # short, so an Admin's ON/OFF change reaches the PC within about a minute
     batch_size: int = MAX_BATCH_SIZE
     queue_max_events: int = QUEUE_MAX_EVENTS_DEFAULT
     queue_max_age_hours: int = 72

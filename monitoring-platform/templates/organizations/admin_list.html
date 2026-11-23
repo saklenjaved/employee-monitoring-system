@@ -31,6 +31,23 @@
               <button type="submit" class="secondary">Resend invitation</button>
             </form>
           {% endif %}
+          {% if admin.admin_status != "pending" %}
+            {% if admin.is_active %}
+              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form"
+                    data-confirm="Deactivate {{ admin.email }} as Admin of {{ admin.organization.name }}? They cannot sign in until reactivated."
+                    data-confirm-label="Deactivate" data-confirm-danger>
+                {% csrf_token %}
+                <input type="hidden" name="active" value="0">
+                <button type="submit" class="danger">Deactivate</button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="active" value="1">
+                <button type="submit">Activate</button>
+              </form>
+            {% endif %}
+          {% endif %}
         </td>
       </tr>
     {% empty %}

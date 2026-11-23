@@ -7,6 +7,7 @@ from django.urls import reverse
 from accounts.models import Role
 from accounts.tests.factories import make_org, make_user
 from analytics.tests.helpers import make_device
+from monitoring.models import MonitoringPolicy
 from screenshots import services
 from screenshots.tests.test_pages import SETTINGS, make_shot
 
@@ -17,6 +18,8 @@ class GalleryFilterTests(TestCase):
     @classmethod
     def setUpTestData(cls):
         cls.org_a, cls.org_b = make_org("Org A"), make_org("Org B")
+        # Times are shown in the organization's own zone, so Org A is set to India time for these checks.
+        MonitoringPolicy.objects.create(organization=cls.org_a, timezone="Asia/Kolkata")
         cls.admin_a = make_user("admin@a.test", Role.ADMIN, cls.org_a)
         cls.erin = make_user("erin@a.test", Role.EMPLOYEE, cls.org_a, "Erin One")
         cls.eli = make_user("eli@a.test", Role.EMPLOYEE, cls.org_a, "Eli Two")

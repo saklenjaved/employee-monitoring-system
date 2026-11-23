@@ -3,16 +3,19 @@
 {% block content %}
 <div class="card">
   <h1>Organizations</h1>
+  <p class="muted">Open an organization to see and manage its Admins.</p>
   <p><a class="button" href="{% url 'organization_create' %}">New organization</a></p>
   <table>
     <tr><th>Name</th><th>Status</th><th>Admins</th><th></th></tr>
     {% for organization in organizations %}
       <tr>
-        <td>{{ organization.name }}</td>
-        <td>{% if organization.is_active %}Active{% else %}Deactivated{% endif %}</td>
+        <td><a href="{% url 'organization_detail' organization.pk %}">{{ organization.name }}</a></td>
+        <td>
+          {% if organization.is_active %}<span class="status ok">Active</span>
+          {% else %}<span class="status bad">Deactivated</span>{% endif %}
+        </td>
         <td>{{ organization.admin_count }}</td>
         <td>
-          <a href="{% url 'organization_admin_create' organization.pk %}">Add Admin</a>
           <form method="post" action="{% url 'organization_set_active' organization.pk %}" class="inline-form"{% if organization.is_active %} data-confirm="Deactivate this organization? Its people will be signed out and cannot use their devices." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
             {% csrf_token %}
             {% if organization.is_active %}

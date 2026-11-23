@@ -17,7 +17,7 @@ from monitoring.services import is_within_monitoring_hours, timezone_for
 from workforce.models import UserTeam
 from workforce.services import visible_employees
 
-from .models import Screenshot, ScreenshotExclusion, ScreenshotPolicy, ScreenshotStatus
+from .models import DEFAULT_MONITORING_MINUTES, Screenshot, ScreenshotExclusion, ScreenshotPolicy, ScreenshotStatus
 from .storage import get_storage
 
 POLICY_FIELDS = (
@@ -25,6 +25,7 @@ POLICY_FIELDS = (
     "interval_seconds",
     "retention_days",
     "blur_level",
+    "monitoring_minutes",
     "managers_can_view",
     "managers_can_download",
 )
@@ -54,6 +55,14 @@ class NotAllowed(Exception):
 def get_policy(organization):
     policy, _ = ScreenshotPolicy.objects.get_or_create(organization=organization)
     return policy
+
+
+def monitoring_seconds(organization):
+    """How long one monitoring start may collect, from the Admin's setting. The starting value if none is saved."""
+    minutes = (
+        ScreenshotPolicy.objects.filter(organization=organization).values_list("monitoring_minutes", flat=True).first()
+    )
+    return (minutes or DEFAULT_MONITORING_MINUTES) * 60
 
 
 def update_policy(actor, organization, values):

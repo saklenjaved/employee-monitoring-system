@@ -70,7 +70,7 @@ def test_agent_sends_events_and_screenshot_to_mock_backend(cert_pair, tmp_path):
         shots = ScreenshotManager(
             api=api, uploader=PresignedS3Uploader(http), capturer=FakeCapturer(_png()),
             session=FakeSession(), redactor=SolidFillRedactor(), temp_dir=cfg.temp_dir,
-            local_enabled=True, max_bytes=10 * 1024 * 1024,
+            max_bytes=10 * 1024 * 1024,
             foreground_process=lambda: "notepad.exe",
         )
         clock = {"t": 0.0}

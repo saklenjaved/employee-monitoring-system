@@ -1,6 +1,7 @@
 from zoneinfo import ZoneInfo
 
 from django.db import transaction
+from django.utils import timezone
 
 from audit.services import record_event
 
@@ -28,6 +29,12 @@ def timezone_for(organization):
     """The organization's time zone, without creating a policy row (safe to call on a page view)."""
     name = MonitoringPolicy.objects.filter(organization=organization).values_list("timezone", flat=True).first()
     return ZoneInfo(name or "UTC")
+
+
+def zone_context(organization):
+    """The organization's time zone and its short name (for example IST), for showing times on a page."""
+    zone = timezone_for(organization)
+    return {"zone": zone, "zone_label": timezone.now().astimezone(zone).strftime("%Z")}
 
 
 def is_within_monitoring_hours(organization, moment):

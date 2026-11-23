@@ -33,10 +33,8 @@ class ScreenshotPolicy:
         session_type: str,
         locked: bool,
         foreground_process: str | None,
-        local_enabled: bool,
     ) -> str | None:
-        if not local_enabled:
-            return "local_config_disabled"
+        # The Admin's setting is the only switch. The server sends it, and it is checked again at upload.
         if not self.enabled:
             return "policy_disabled"
         if self.window is None or not self.window.is_open(local_now):

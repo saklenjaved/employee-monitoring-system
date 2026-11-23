@@ -310,7 +310,7 @@ def platform_report(viewer):
         "active_admin_count": admin_totals["active"],
         "pending_admin_count": admin_totals["pending"],
         "inactive_admin_count": admin_totals["inactive"],
-        "recent_admins": list(admins.order_by("-date_joined", "-pk")[:5]),
+        "admins": list(admins.order_by("organization__name", "full_name", "pk")),
         "device_count": sum(org.device_count for org in organizations),
         "online_count": sum(org.online_count for org in organizations),
         "recent_activity": recent,

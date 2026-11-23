@@ -6,6 +6,10 @@ from django.db import models
 from django.db.models import Q
 
 
+# The starting value for a new organization. The Admin changes it in Screenshot settings.
+DEFAULT_MONITORING_MINUTES = 480
+
+
 class BlurLevel(models.TextChoices):
     NONE = "none", "No blur"
     LOW = "low", "Low"
@@ -31,6 +35,11 @@ class ScreenshotPolicy(models.Model):
         null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(3650)]
     )
     blur_level = models.CharField(max_length=10, choices=BlurLevel.choices, blank=True, default="")
+    # How long one monitoring start keeps collecting after the employee approves it (minutes). Set by the Admin.
+    monitoring_minutes = models.PositiveIntegerField(
+        default=DEFAULT_MONITORING_MINUTES,
+        validators=[MinValueValidator(15), MaxValueValidator(1440)],
+    )
     # Who may look at screenshots besides Admins. Employees never can. Download is off by default.
     managers_can_view = models.BooleanField(default=True)
     managers_can_download = models.BooleanField(default=False)

@@ -44,8 +44,8 @@ def activate(request):
 
 @role_required()
 def home(request):
-    """Landing page after login. Role dashboards are added in later phases."""
-    return render(request, "accounts/home.html")
+    """The site's root address goes straight to the signed-in person's dashboard for their role."""
+    return redirect("dashboard")
 
 
 @role_required()

@@ -17,11 +17,12 @@ from audit.services import record_event
 from accounts.models import Role
 from monitoring.models import MonitoringPolicy
 from screenshots.models import ScreenshotPolicy
-from monitoring.services import timezone_for
+from monitoring.services import get_policy, timezone_for, zone_context
 from accounts.pin import has_pin
 from devices.pairing import awaiting_first_contact, open_window_for, waiting_pcs_for
 from devices.services import connection_state, sync_status
 from devices.start import monitoring_status
+from screenshots.services import can_view_screenshots, visible_screenshots
 from workforce.services import visible_employees, visible_teams
 
 from .forms import DateRangeForm
@@ -128,22 +129,48 @@ def my_dashboard(request):
     return _page(request, "analytics/employee.html", user.organization, context)
 
 
+WEEKDAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+RECENT_SCREENSHOTS = 12
+
+
+def _monitoring_window(organization):
+    """The organization's monitoring days and hours, for display. The default policy is created on first use."""
+    policy = get_policy(organization)
+    return {
+        "enabled": policy.enabled,
+        "days": ", ".join(WEEKDAY_NAMES[day] for day in sorted(policy.days)),
+        "start": policy.start_time.strftime("%H:%M"),
+        "end": policy.end_time.strftime("%H:%M"),
+        "timezone": policy.timezone,
+    }
+
+
 @role_required(Role.ADMIN, Role.MANAGER)
 def employee_dashboard(request, pk):
     employee = visible_employees(request.user).filter(pk=pk).first()
     if employee is None:
         raise Http404
-    return _page(
-        request,
-        "analytics/employee.html",
-        request.user.organization,
-        lambda start, end: {
+
+    def context(start, end):
+        can_view = can_view_screenshots(request.user)
+        # Only this employee's screenshots, and only those the viewer may see (checked by visible_screenshots).
+        shots = (
+            visible_screenshots(request.user).filter(user=employee).order_by("-captured_at")[:RECENT_SCREENSHOTS]
+            if can_view
+            else []
+        )
+        return {
             "employee": employee,
             "report": usage_for(request.user, employee, start, end),
             "own": False,
             "live": employee_live(employee),
-        },
-    )
+            "monitoring_window": _monitoring_window(request.user.organization),
+            "can_view_screenshots": can_view,
+            "screenshots": shots,
+            **zone_context(request.user.organization),
+        }
+
+    return _page(request, "analytics/employee.html", request.user.organization, context)
 
 
 @role_required(Role.ADMIN, Role.MANAGER)
@@ -152,7 +179,8 @@ def employee_live_panel(request, pk):
     employee = visible_employees(request.user).filter(pk=pk).first()
     if employee is None:
         raise Http404
-    return render(request, "analytics/_employee_live.html", {"employee": employee, "live": employee_live(employee)})
+    context = {"employee": employee, "live": employee_live(employee), **zone_context(request.user.organization)}
+    return render(request, "analytics/_employee_live.html", context)
 
 
 @role_required(Role.MANAGER)
@@ -242,7 +270,7 @@ def organization_dashboard(request):
             "policy_days": ", ".join(calendar.day_abbr[day] for day in sorted(policy.days)),
             # Read only, like the monitoring policy above: no row is created by a page view.
             "shot_policy": ScreenshotPolicy.objects.filter(organization=organization).first(),
-            **_zone_context(organization),
+            **zone_context(organization),
         }
 
     return _page(request, "analytics/organization.html", request.user.organization, context)
@@ -324,11 +352,4 @@ def organization_trend(request):
 def organization_live(request):
     """The auto-refreshing tiles on the Admin dashboard (an HTMX partial)."""
     organization = request.user.organization
-    return render(request, "analytics/_live.html", {"live": live_status(request.user), **_zone_context(organization)})
-
-
-def _zone_context(organization):
-    """The organization's own time zone and its short name (for example IST), so times on the Admin page are
-    shown in the zone the organization uses, not in the server's UTC."""
-    zone = timezone_for(organization)
-    return {"zone": zone, "zone_label": timezone.now().astimezone(zone).strftime("%Z")}
+    return render(request, "analytics/_live.html", {"live": live_status(request.user), **zone_context(organization)})

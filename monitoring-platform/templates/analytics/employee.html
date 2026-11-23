@@ -82,6 +82,15 @@
       <dt>Role</dt><dd>{{ employee.get_role_display }}</dd>
       <dt>Status</dt><dd>{% if employee.is_active %}Active{% else %}Deactivated{% endif %}</dd>
     </dl>
+    {% if monitoring_window %}
+    <div class="section-title"><h2>Working hours</h2></div>
+    <dl class="details">
+      <dt>Monitored days</dt><dd>{{ monitoring_window.days }}</dd>
+      <dt>Monitored hours</dt><dd>{{ monitoring_window.start }}&ndash;{{ monitoring_window.end }}</dd>
+      <dt>Time zone</dt><dd>{{ monitoring_window.timezone }}</dd>
+      <dt>Monitoring</dt><dd>{% if monitoring_window.enabled %}On{% else %}Off{% endif %}</dd>
+    </dl>
+    {% endif %}
     {% endif %}
   </div>
   {% if own %}
@@ -101,8 +110,32 @@
 <div class="card">
   <div class="section-title"><h2>{% if own %}My usage{% else %}Usage{% endif %}</h2></div>
   {% include "analytics/_filters.html" %}
+  {% if own %}
   <div class="five-up">{% include "analytics/_stats.html" with stats=report %}</div>
+  {% else %}
+  {% include "analytics/_stats_table.html" with stats=report %}
+  {% endif %}
 </div>
+
+{% if not own and can_view_screenshots %}
+<div class="card">
+  <div class="section-title"><h2>Recent screenshots</h2><a href="{% url 'screenshot_list' %}?employee={{ employee.pk }}">All screenshots for {{ employee.full_name }}</a></div>
+  <div class="table-wrap">
+    <table class="chart-table">
+      <tr><th>Captured</th><th>Status</th><th></th></tr>
+      {% for shot in screenshots %}
+        <tr>
+          <td>{% timezone zone %}{{ shot.captured_at|date:"j M Y, H:i:s" }}{% endtimezone %} {{ zone_label }}</td>
+          <td>{{ shot.get_status_display }}</td>
+          <td><a href="{% url 'screenshot_detail' shot.pk %}">Open</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="3" class="muted">No screenshots captured for this employee yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endif %}
 
 <div class="card">
   <div class="section-title"><h2>Application time per day</h2></div>

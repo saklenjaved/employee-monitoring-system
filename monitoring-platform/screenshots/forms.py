@@ -4,7 +4,7 @@ from accounts.models import Role, User
 from workforce.models import Department, EmployeeProfile
 from workforce.services import visible_employees, visible_teams
 
-from .models import BlurLevel, ScreenshotStatus
+from .models import DEFAULT_MONITORING_MINUTES, BlurLevel, ScreenshotStatus
 from .services import can_view_screenshots
 
 MAX_RANGE_DAYS = 92
@@ -19,6 +19,11 @@ class ScreenshotSettingsForm(forms.Form):
     retention_days = forms.IntegerField(
         required=False, min_value=1, max_value=3650, label="Keep screenshots for (days)",
         help_text="Older screenshots are deleted by the daily cleanup. There is no default: choose a value.",
+    )
+    monitoring_minutes = forms.IntegerField(
+        min_value=15, max_value=1440, initial=DEFAULT_MONITORING_MINUTES,
+        label="Monitoring duration after the employee approves (minutes)",
+        help_text="Between 15 and 1440. When this time runs out, capturing stops until the employee approves again.",
     )
     blur_level = forms.ChoiceField(
         required=False,

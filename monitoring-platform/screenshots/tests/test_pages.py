@@ -260,7 +260,7 @@ class SettingsPageTests(ScreenshotPageTestCase):
 
     def post(self, **overrides):
         data = {"enabled": "on", "interval_seconds": "900", "retention_days": "60", "blur_level": "high",
-                "managers_can_view": "on"}
+                "monitoring_minutes": "480", "managers_can_view": "on"}
         data.update(overrides)
         return self.client.post(self.url, {k: v for k, v in data.items() if v is not None})
 

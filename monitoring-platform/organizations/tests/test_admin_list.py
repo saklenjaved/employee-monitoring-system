@@ -120,16 +120,16 @@ class PlatformDashboardAdminStatsTests(TestCase):
 
         report = analytics_services.platform_report(self.super_admin)
         self.assertEqual((report["admin_count"], report["active_admin_count"], report["pending_admin_count"]), (2, 1, 1))
-        self.assertEqual({admin.email for admin in report["recent_admins"]}, {"a@acme.test", "p@acme.test"})
+        self.assertEqual({admin.email for admin in report["admins"]}, {"a@acme.test", "p@acme.test"})
 
         page = self.client.get(reverse("dashboard_platform"))
-        for text in ("Total Admins", "Active Admins", "Pending invitations", "Latest Admins", "Active One", "Pending One"):
+        for text in ("Total Admins", "Active Admins", "Pending invitations", "Admins across all organizations", "Active One", "Pending One"):
             self.assertContains(page, text)
         self.assertContains(page, f'{reverse("admin_list")}?status=pending')
 
-    def test_the_latest_admins_list_shows_at_most_five(self):
+    def test_the_dashboard_lists_every_admin_across_organizations(self):
         for number in range(7):
             open_invitation(self.super_admin, self.org, f"n{number}@acme.test", f"Name {number}", Role.ADMIN)
         report = analytics_services.platform_report(self.super_admin)
-        self.assertEqual(len(report["recent_admins"]), 5)
+        self.assertEqual(len(report["admins"]), 7)
         self.assertEqual(report["admin_count"], 7)

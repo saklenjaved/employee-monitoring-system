@@ -50,7 +50,6 @@ class ScreenshotManager:
         session: SessionInspector,
         redactor: SolidFillRedactor,
         temp_dir: Path,
-        local_enabled: bool,
         max_bytes: int,
         now: Callable[[], datetime] = lambda: datetime.now(timezone.utc),
         foreground_process: Callable[[], str | None] = lambda: None,
@@ -61,7 +60,6 @@ class ScreenshotManager:
         self._session = session
         self._redactor = redactor
         self._temp = Path(temp_dir)
-        self._local_enabled = local_enabled
         self._max_bytes = max_bytes
         self._now = now
         self._foreground = foreground_process
@@ -73,7 +71,6 @@ class ScreenshotManager:
             session_type=self._session.session_type(),
             locked=self._session.is_locked(),
             foreground_process=self._foreground(),
-            local_enabled=self._local_enabled,
         )
         if reason is not None:
             return ScreenshotOutcome("skipped", reason)

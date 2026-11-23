@@ -13,6 +13,8 @@ from django.utils import timezone
 
 from audit.services import record_event
 
+from screenshots.services import monitoring_seconds
+
 from .models import Device, MonitoringStart
 
 STATUS_NOT_CONNECTED = "not_connected"
@@ -139,7 +141,7 @@ def start_instruction(device, now=None):
         device=device, status=MonitoringStart.Status.PENDING, expires_at__gt=now
     ).first()
     if pending:
-        return {"id": str(pending.id), "authorized_seconds": settings.MONITORING_AUTHORIZED_SECONDS}
+        return {"id": str(pending.id), "authorized_seconds": monitoring_seconds(device.organization)}
     running = (
         MonitoringStart.objects.filter(device=device, status=MonitoringStart.Status.CONFIRMED, authorized_until__gt=now)
         .order_by("-confirmed_at")
@@ -164,7 +166,7 @@ def confirm_start(device, start_id, now=None):
             return False
         start.status = MonitoringStart.Status.CONFIRMED
         start.confirmed_at = now
-        start.authorized_until = now + timedelta(seconds=settings.MONITORING_AUTHORIZED_SECONDS)
+        start.authorized_until = now + timedelta(seconds=monitoring_seconds(device.organization))
         start.save(update_fields=["status", "confirmed_at", "authorized_until"])
         record_event(start.user, "monitoring.started", organization=device.organization, target=start)
     return True

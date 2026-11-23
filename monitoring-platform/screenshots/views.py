@@ -18,6 +18,7 @@ from access_control.permissions import role_required
 from accounts.models import Role
 from devices.models import Device
 from devices.services import agent_policy
+from monitoring.services import zone_context
 from workforce.models import EmployeeProfile, UserTeam
 
 from . import services
@@ -75,7 +76,7 @@ def settings_page(request):
         except ValueError as error:
             form.add_error(None, str(error))
         else:
-            messages.success(request, "Settings saved. Each PC applies them within about five minutes; the table below shows which PCs have them.")
+            messages.success(request, "Settings saved. Each PC applies them within about a minute; the table below shows which PCs have them.")
             return redirect("screenshot_settings")
     return render(request, "screenshots/settings.html", {
         "form": form,
@@ -155,6 +156,7 @@ def screenshot_list(request):
             "can_download": services.can_download(viewer),
             "shown_from": page.start_index() if page.paginator.count else 0,
             "shown_to": page.end_index() if page.paginator.count else 0,
+            **zone_context(viewer.organization),
         },
     )
 
@@ -178,6 +180,7 @@ def screenshot_detail(request, pk):
             "can_download": services.can_download(request.user),
             "can_delete": services.can_delete(request.user),
             "statuses": ScreenshotStatus,
+            **zone_context(request.user.organization),
         },
     )
 

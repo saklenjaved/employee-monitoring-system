@@ -35,10 +35,10 @@
   </table>
 </div>
 <div class="card">
-  <h2>Latest Admins</h2>
+  <h2>Admins across all organizations</h2>
   <table>
     <tr><th>Name</th><th>Email</th><th>Organization</th><th>Status</th><th>Created</th></tr>
-    {% for admin in report.recent_admins %}
+    {% for admin in report.admins %}
       <tr>
         <td>{{ admin.full_name }}</td>
         <td>{{ admin.email }}</td>
@@ -54,7 +54,7 @@
       <tr><td colspan="5" class="muted">No Admin accounts yet.</td></tr>
     {% endfor %}
   </table>
-  {% if report.recent_admins %}<p><a href="{% url 'admin_list' %}">View all Admins</a></p>{% endif %}
+  {% if report.admins %}<p><a href="{% url 'admin_list' %}">Manage Admins (activate or deactivate)</a></p>{% endif %}
 </div>
 <div class="card">
   <h2>Recent administrative activity</h2>

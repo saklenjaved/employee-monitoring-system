@@ -144,12 +144,12 @@
               <button type="button" class="shot-thumb"
                       data-src="{% url 'screenshot_image' shot.pk %}"
                       data-name="{{ shot.user.full_name|default:shot.user.email }}"
-                      data-time="{% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:'j M Y, H:i' }}{% endtimezone %} IST"
+                      data-time="{% timezone zone %}{{ shot.captured_at|date:'j M Y, H:i' }}{% endtimezone %} {{ zone_label }}"
                       data-device="{{ shot.device.name }}"
                       data-status="{{ shot.get_status_display }}"
                       data-detail="{% url 'screenshot_detail' shot.pk %}"
                       data-download="{% if can_download %}{% url 'screenshot_download' shot.pk %}{% endif %}"
-                      aria-label="Open screenshot of {{ shot.user.full_name|default:shot.user.email }}, {% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:'j M Y H:i' }}{% endtimezone %} IST">
+                      aria-label="Open screenshot of {{ shot.user.full_name|default:shot.user.email }}, {% timezone zone %}{{ shot.captured_at|date:'j M Y H:i' }}{% endtimezone %} {{ zone_label }}">
                 <img src="{% url 'screenshot_image' shot.pk %}" alt="" loading="lazy" decoding="async"
                      width="{{ shot.width|default:1600 }}" height="{{ shot.height|default:1000 }}">
                 <span class="thumb-fallback">Image could not be loaded</span>
@@ -164,7 +164,7 @@
               <div class="shot-row">
                 <span class="shot-name">{{ shot.user.full_name|default:shot.user.email }}</span>
               </div>
-              <div class="shot-sub">{% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:"j M Y, H:i" }}{% endtimezone %} IST</div>
+              <div class="shot-sub">{% timezone zone %}{{ shot.captured_at|date:"j M Y, H:i" }}{% endtimezone %} {{ zone_label }}</div>
               <div class="shot-row">
                 <span class="shot-sub">{{ shot.device.name }}{% if shot.employee_code %} &middot; {{ shot.employee_code }}{% endif %}</span>
                 {% if shot.status == "uploaded" %}

@@ -64,7 +64,6 @@ def build_agent(cfg: AgentConfig, version: str) -> tuple[Agent, Callable | None]
         session=session,
         redactor=SolidFillRedactor(),
         temp_dir=cfg.temp_dir,
-        local_enabled=cfg.screenshots.enabled,
         max_bytes=cfg.screenshots.max_upload_bytes,
         foreground_process=foreground_name,
     )

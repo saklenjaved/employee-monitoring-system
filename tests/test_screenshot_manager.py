@@ -39,7 +39,7 @@ class MockUploader:
             raise self.error
 
 
-def build(tmp_path: Path, outcomes, uploader=None, session=None, capturer=None, local_enabled=True, foreground=None):
+def build(tmp_path: Path, outcomes, uploader=None, session=None, capturer=None, foreground=None):
     http_session = ScriptedSession(outcomes)
     api = AgentApi(HttpClient(BASE, 5, lambda: "tok", session=http_session))
     uploader = uploader or MockUploader()
@@ -50,7 +50,6 @@ def build(tmp_path: Path, outcomes, uploader=None, session=None, capturer=None, 
         session=session or FakeSession(),
         redactor=SolidFillRedactor(),
         temp_dir=tmp_path / "tmp",
-        local_enabled=local_enabled,
         max_bytes=10 * 1024 * 1024,
         now=lambda: WORKDAY_9AM,
         foreground_process=lambda: foreground,
@@ -64,9 +63,9 @@ COMPLETE_OK = (200, {"screenshot_id": "x", "status": "uploaded"})
 
 def test_off_by_default_no_capture_no_network(tmp_path):
     capturer = FakeCapturer()
-    mgr, http, _ = build(tmp_path, [], capturer=capturer, local_enabled=False)
-    out = mgr.run_once(ScreenshotPolicy(enabled=True, window=WINDOW))
-    assert out.status == "skipped" and out.reason == "local_config_disabled"
+    mgr, http, _ = build(tmp_path, [], capturer=capturer)
+    out = mgr.run_once(ScreenshotPolicy(enabled=False, window=WINDOW))
+    assert out.status == "skipped" and out.reason == "policy_disabled"
     assert capturer.calls == 0 and http.calls == []
 
 
@@ -185,7 +184,7 @@ def test_oversize_image_is_skipped(tmp_path):
     http = ScriptedSession([])
     api = AgentApi(HttpClient(BASE, 5, lambda: "tok", session=http))
     mgr = ScreenshotManager(api, MockUploader(), FakeCapturer(make_png()), FakeSession(), SolidFillRedactor(),
-                            tmp_path / "tmp", True, 10, now=lambda: WORKDAY_9AM)
+                            tmp_path / "tmp", 10, now=lambda: WORKDAY_9AM)
     assert mgr.run_once(ScreenshotPolicy(enabled=True, window=WINDOW)).reason == "image_too_large"
     assert http.calls == []
 

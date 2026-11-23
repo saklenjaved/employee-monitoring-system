@@ -339,9 +339,9 @@ class ReadOnlyPageTests(DashboardTestCase):
 
 
 class HomeAndNavigationTests(DashboardTestCase):
-    def test_home_links_to_the_dashboard(self):
+    def test_home_goes_to_the_employee_dashboard(self):
         self.client.force_login(self.e1)
-        self.assertContains(self.client.get(reverse("home")), reverse("dashboard"))
+        self.assertRedirects(self.client.get(reverse("home")), reverse("dashboard"), fetch_redirect_response=False)
 
     def test_audit_log_is_not_written_for_viewing_dashboards(self):
         before = AuditLog.objects.count()

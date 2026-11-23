@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ organization.name }}{% endblock %}
+{% block content %}
+<div class="card">
+  <p><a href="{% url 'organization_list' %}">&larr; All organizations</a></p>
+  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+    <div>
+      <h1 style="margin-bottom:6px">{{ organization.name }}</h1>
+      {% if organization.is_active %}<span class="status ok">Active</span>
+      {% else %}<span class="status bad">Deactivated</span>{% endif %}
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <a class="button" href="{% url 'organization_admin_create' organization.pk %}">Add Admin</a>
+      <form method="post" action="{% url 'organization_set_active' organization.pk %}" class="inline-form"{% if organization.is_active %} data-confirm="Deactivate this organization? Its people will be signed out and cannot use their devices." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
+        {% csrf_token %}
+        {% if organization.is_active %}
+          <input type="hidden" name="active" value="0">
+          <button type="submit" class="secondary">Deactivate organization</button>
+        {% else %}
+          <input type="hidden" name="active" value="1">
+          <button type="submit">Activate organization</button>
+        {% endif %}
+      </form>
+    </div>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Admins</h2>
+  {% if admins %}
+    <table>
+      <tr><th>Name</th><th>Email</th><th>Status</th><th></th></tr>
+      {% for admin in admins %}
+        <tr>
+          <td>{{ admin.full_name }}</td>
+          <td>{{ admin.email }}</td>
+          <td>
+            {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
+            {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
+            {% else %}<span class="status bad">Inactive</span>{% endif %}
+          </td>
+          <td>
+            {% if admin.admin_status == "pending" %}
+              <form method="post" action="{% url 'organization_admin_resend_invite' admin.pk %}" class="inline-form">
+                {% csrf_token %}
+                <button type="submit" class="secondary">Resend invitation</button>
+              </form>
+            {% elif admin.is_active %}
+              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form"
+                    data-confirm="Deactivate {{ admin.email }} as Admin of {{ organization.name }}? They cannot sign in until reactivated."
+                    data-confirm-label="Deactivate" data-confirm-danger>
+                {% csrf_token %}
+                <input type="hidden" name="active" value="0">
+                <input type="hidden" name="next" value="organization">
+                <button type="submit" class="danger">Deactivate</button>
+              </form>
+            {% else %}
+              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form">
+                {% csrf_token %}
+                <input type="hidden" name="active" value="1">
+                <input type="hidden" name="next" value="organization">
+                <button type="submit">Activate</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </table>
+  {% else %}
+    <p class="muted">No Admins yet. <a href="{% url 'organization_admin_create' organization.pk %}">Add the first Admin</a>.</p>
+  {% endif %}
+</div>
+{% endblock %}

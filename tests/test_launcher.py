@@ -52,7 +52,7 @@ class Harness:
         self.app = AppMonitor(fg, 30)
         self.session = session or FakeSession()
         self.shots = ScreenshotManager(self.api, MockUploader(), FakeCapturer(), self.session, SolidFillRedactor(),
-                                       tmp_path / "tmp", False, 10_000_000)
+                                       tmp_path / "tmp", 10_000_000)
         self.clock_value = 0.0
         self.agent = Agent(
             config=self.cfg, version="0.1.0", api=self.api, credentials=self.store, queue=self.queue, sync=self.sync,
@@ -309,3 +309,22 @@ def test_a_kept_start_begins_collecting_when_the_hours_open(tmp_path):
     assert h.agent.tick(TEN_AM + timedelta(days=1)) == "active"
     assert h.queue.depth() == 2
     assert h.http.calls[-1]["json"]["monitoring_start_id"] == START["id"]
+
+
+def test_admin_turning_screenshots_on_and_off_is_followed_at_the_next_capture(tmp_path):
+    """No PC-side setting: the Admin's policy alone decides, and an OFF is read before the next capture."""
+    from winagent.screenshots.manager import ScreenshotOutcome
+
+    on = dict(POLICY_JSON, screenshots={"enabled": True, "interval_seconds": 600})
+    off = dict(POLICY_JSON, screenshots={"enabled": False, "interval_seconds": 600})
+    h = Harness(tmp_path, [(200, on), (200, off)])
+    seen = []
+
+    def fake_run_once(policy):
+        seen.append(policy.enabled)
+        return ScreenshotOutcome("skipped", "test")
+
+    h.shots.run_once = fake_run_once
+    h.agent._screenshot_pass(200.0)  # the Admin has turned it ON
+    h.agent._screenshot_pass(500.0)  # the Admin has turned it OFF since
+    assert seen == [True]

@@ -92,6 +92,7 @@ class Agent:
         # monotonic time it stops. Zero means no start, so the agent collects nothing.
         self._start_id: str | None = None
         self._authorized_until = 0.0
+        self._policy_checked_at = float("-inf")  # when the policy was last read from the server
         self.health = HealthSnapshot(agent_version=version)
 
     @property
@@ -182,6 +183,7 @@ class Agent:
         log.info("credential renewed")
 
     def _refresh_policy(self, mono: float) -> None:
+        self._policy_checked_at = mono
         try:
             raw = self._api.get_config()
             before = self._policy.screenshots if self._policy else None
@@ -225,8 +227,15 @@ class Agent:
             log.warning("sync stopped: re-registration required")
 
     def _screenshot_pass(self, mono: float) -> None:
-        assert self._policy is not None
+        # Read the Admin's latest setting right before capturing, so turning screenshots OFF stops the next capture.
+        # A policy read earlier in this same tick is already fresh, so it is not read twice.
+        if mono - self._policy_checked_at > 1.0:
+            self._refresh_policy(mono)
+        if self._policy is None or self._sync.auth_failed:
+            return
         self._timers.screenshot_due = mono + self._policy.screenshots.interval_seconds
+        if not self._policy.screenshots.enabled:
+            return
         try:
             outcome = self._shots.run_once(self._policy.screenshots)
         except Exception as exc:  # screenshot failures never stop event sync

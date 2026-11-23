@@ -63,11 +63,10 @@ class LoginTests(TestCase):
         response = self.client.get(reverse("home"))
         self.assertRedirects(response, f"{reverse('login')}?next={reverse('home')}")
 
-    def test_home_shows_role_and_organization(self):
+    def test_home_sends_the_signed_in_user_to_their_dashboard(self):
         self.client.force_login(self.admin)
         response = self.client.get(reverse("home"))
-        self.assertContains(response, "Admin")
-        self.assertContains(response, "Org")
+        self.assertRedirects(response, reverse("dashboard"), fetch_redirect_response=False)
 
 
 class PasswordResetTests(TestCase):

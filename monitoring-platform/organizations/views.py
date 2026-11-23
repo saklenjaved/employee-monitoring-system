@@ -15,7 +15,7 @@ from common.listing import Column, Filter, build_listing
 
 from .forms import AdminAccountForm, OrganizationForm
 from .models import Organization
-from .services import create_organization, set_organization_active
+from .services import create_organization, set_organization_active, set_organization_admin_active
 
 
 ADMIN_COLUMNS = (
@@ -54,8 +54,16 @@ def admin_list(request):
 def organization_list(request):
     organizations = Organization.objects.annotate(
         admin_count=Count("users", filter=Q(users__role=Role.ADMIN))
-    )
+    ).order_by("name")
     return render(request, "organizations/list.html", {"organizations": organizations})
+
+
+@role_required(Role.SUPER_ADMIN)
+def organization_detail(request, pk):
+    """One organization and its Admin accounts."""
+    organization = get_object_or_404(Organization, pk=pk)
+    admins = platform_admins(request.user).filter(organization=organization).order_by("full_name", "pk")
+    return render(request, "organizations/detail.html", {"organization": organization, "admins": admins})
 
 
 @role_required(Role.SUPER_ADMIN)
@@ -125,3 +133,20 @@ def organization_admin_resend_invite(request, pk):
         else:
             messages.warning(request, f"The activation code for {user.email} could not be sent. Try again later.")
     return redirect("organization_admin_create", pk=user.organization_id)
+
+
+@role_required(Role.SUPER_ADMIN)
+@require_POST
+def organization_admin_set_active(request, pk):
+    user = get_object_or_404(User, pk=pk, role=Role.ADMIN)
+    active = request.POST.get("active") == "1"
+    try:
+        set_organization_admin_active(request.user, user, active)
+    except ValueError as error:
+        messages.error(request, str(error))
+    else:
+        state = "activated" if active else "deactivated"
+        messages.success(request, f"Admin {user.email} {state}.")
+    if request.POST.get("next") == "organization" and user.organization_id:
+        return redirect("organization_detail", pk=user.organization_id)
+    return redirect("admin_list")

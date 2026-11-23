@@ -130,7 +130,7 @@ class HeartbeatStartTests(AgentApiTestCase):
         start.refresh_from_db()
         self.assertEqual(start.status, MonitoringStart.Status.CONFIRMED)
         self.assertEqual(reply["start"]["id"], str(start.id))
-        self.assertLessEqual(reply["start"]["authorized_seconds"], settings.MONITORING_AUTHORIZED_SECONDS)
+        self.assertLessEqual(reply["start"]["authorized_seconds"], 480 * 60)  # the default duration, set by the Admin
         self.assertGreater(reply["start"]["authorized_seconds"], 0)
 
     def test_active_without_the_start_id_does_not_confirm(self):

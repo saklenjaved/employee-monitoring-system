@@ -317,9 +317,7 @@ if not DEV_MODE:
 MONITORING_START_TIMEOUT_SECONDS = 10 * 60
 # How long an Admin's request waits for the employee to approve it on their dashboard.
 MONITORING_APPROVAL_TIMEOUT_SECONDS = 24 * 60 * 60
-# Once the agent confirms, it may collect for this long, then it stops until the employee starts again (seconds).
-# Both values are defaults to confirm.
-MONITORING_AUTHORIZED_SECONDS = 8 * 60 * 60
+# How long a confirmed monitoring start collects is set by the Admin in Screenshot settings (monitoring_minutes).
 
 # Employee pairing (docs/employee-pairing-plan.md). Both values are defaults to confirm.
 SETUP_WINDOW_MINUTES = 30  # how long an Admin's "Start Monitoring Setup" lets the employee approve a PC

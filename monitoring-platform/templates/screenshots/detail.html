@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card">
   <h1>Screenshot</h1>
-  <p>{{ shot.user.full_name }} &middot; {% timezone 'Asia/Kolkata' %}{{ shot.captured_at|date:"j M Y H:i:s" }}{% endtimezone %} IST &middot; {{ shot.device.name }}</p>
+  <p>{{ shot.user.full_name }} &middot; {% timezone zone %}{{ shot.captured_at|date:"j M Y H:i:s" }}{% endtimezone %} {{ zone_label }} &middot; {{ shot.device.name }}</p>
   {% if shot.status == "uploaded" %}
     <p class="muted">Showing this image is recorded in the audit log.</p>
     <p><img src="{% url 'screenshot_image' shot.pk %}" alt="Screenshot of {{ shot.user.full_name }}" style="max-width:100%; border:1px solid var(--c-border)"></p>

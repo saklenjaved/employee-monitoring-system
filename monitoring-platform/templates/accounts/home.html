@@ -1,8 +1,0 @@
-{% extends "base.html" %}
-{% block content %}
-<div class="card">
-  <h1>Welcome, {{ user.full_name }}</h1>
-  <p>Role: <strong>{{ user.get_role_display }}</strong>{% if user.organization %} &middot; Organization: <strong>{{ user.organization.name }}</strong>{% endif %}</p>
-  <p><a class="button" href="{% url 'dashboard' %}">Open my dashboard</a></p>
-</div>
-{% endblock %}

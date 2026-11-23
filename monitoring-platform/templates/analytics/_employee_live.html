@@ -1,4 +1,5 @@
 {# Refreshed every 10 seconds (analytics.dashboards.employee_live_panel). The root carries the refresh, so it keeps going. #}
+{% load tz %}{% timezone zone %}
 <div class="card" id="employee-live" hx-get="{% url 'dashboard_employee_live' employee.pk %}" hx-trigger="every 10s" hx-swap="outerHTML">
   <h2>Live status</h2>
   <div class="agent-line">
@@ -22,7 +23,7 @@
   <h3>Recent activity</h3>
   <div class="table-wrap">
     <table class="chart-table">
-      <tr><th>Time</th><th>Application</th><th>Length</th><th>State</th></tr>
+      <tr><th>Time ({{ zone_label }})</th><th>Application</th><th>Length</th><th>State</th></tr>
       {% for row in live.recent %}
         <tr>
           <td>{{ row.time|date:"j M, H:i:s" }}</td>
@@ -36,3 +37,4 @@
     </table>
   </div>
 </div>
+{% endtimezone %}
