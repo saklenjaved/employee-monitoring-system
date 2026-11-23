@@ -67,9 +67,12 @@ class PersonCreateForm(forms.Form):
         self.fields["department"].queryset = Department.objects.filter(organization=organization)
 
     def clean_email(self):
+        # Each organization has its own accounts: the same email may exist in another organization, and nothing
+        # here reveals whether it does. Only an account in this organization, or the Super Admin's email, blocks it.
         email = self.cleaned_data["email"].strip().lower()
-        if User.objects.filter(email=email).exists():
-            # Neutral wording: it must not reveal that the email belongs to another organization.
+        if User.objects.filter(email=email, organization=self.organization).exists():
+            raise forms.ValidationError("A person with this email already exists in your organization.")
+        if User.objects.filter(email=email, role=Role.SUPER_ADMIN).exists():
             raise forms.ValidationError("This email cannot be used.")
         return email
 

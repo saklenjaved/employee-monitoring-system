@@ -73,19 +73,34 @@ class ActivationServiceTests(TestCase):
         _, error = activate_membership(self.request, "new@a.test", code, NEW_PASSWORD)
         self.assertEqual(error, "")
 
-    def test_an_existing_person_keeps_their_password_and_gets_a_new_membership_only(self):
+    def test_a_person_invited_back_to_the_same_organization_keeps_their_password(self):
         person = make_user("back@a.test", Role.EMPLOYEE, self.org_a)
         old = person.memberships.get()
         old.status, old.end_reason = MembershipStatus.ENDED, "removed"
         old.save()
-        user, membership, code = self.invite("back@a.test", organization=self.org_b)
+        user, membership, code = self.invite("back@a.test", organization=self.org_a)
         activated, error = activate_membership(self.request, "back@a.test", code, "")
         self.assertEqual(error, "")
         activated.refresh_from_db()
+        self.assertEqual(activated.pk, person.pk)  # the same account of this organization
         self.assertTrue(activated.check_password(PASSWORD))
-        self.assertEqual(activated.organization, self.org_b)
         self.assertEqual(Membership.objects.filter(user=activated, status=MembershipStatus.ACTIVE).count(), 1)
         self.assertEqual(activated.memberships.count(), 2)  # the old one stays as history
+
+    def test_the_same_email_in_another_organization_gets_its_own_account_and_password(self):
+        person = make_user("both@a.test", Role.EMPLOYEE, self.org_a)
+        user, membership, code = self.invite("both@a.test", organization=self.org_b)
+        self.assertNotEqual(user.pk, person.pk)
+        _, error = activate_membership(self.request, "both@a.test", code, "")
+        self.assertEqual(error, "Choose a password to finish activation.")  # a new account needs its own password
+        activated, error = activate_membership(self.request, "both@a.test", code, NEW_PASSWORD)
+        self.assertEqual(error, "")
+        self.assertEqual((activated.pk, activated.organization), (user.pk, self.org_b))
+        self.assertTrue(activated.check_password(NEW_PASSWORD))
+        person.refresh_from_db()
+        self.assertTrue(person.check_password(PASSWORD))  # the first organization's account is unchanged
+        self.assertEqual(person.organization, self.org_a)
+        self.assertEqual(person.memberships.get().status, MembershipStatus.ACTIVE)
 
     def test_activation_never_registers_a_device(self):
         _, _, code = self.invite()

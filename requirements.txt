@@ -4,6 +4,7 @@ psutil>=6.0           # process name from process id
 mss>=9.0              # screen capture for screenshots
 Pillow>=10.4          # PNG encode and blur/redaction
 requests>=2.32        # HTTPS calls to the backend (certificate verification on)
+tzdata>=2024.1        # time zones for monitoring hours (Windows has no time zone database)
 pystray>=0.19         # system tray icon
 
 # Tests and local mock backend

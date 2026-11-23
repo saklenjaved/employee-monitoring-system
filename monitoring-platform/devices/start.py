@@ -216,12 +216,14 @@ def _status(device, pending, running, now, cutoff, awaiting=False):
     if device.last_seen_at is None or device.last_seen_at < cutoff:
         # Connection lost. A start that is still waiting is delivered when the PC is back within its time.
         return STATUS_REQUESTED if waiting else STATUS_OFFLINE
-    if waiting:
-        return STATUS_STARTING
+    # A start the agent already confirmed wins over a newer pending one: the agent is running and reporting, so it
+    # is not "Starting" (a new start is only picked up at the agent's next check-in, which can take minutes).
     if running and device.monitoring_state == AGENT_COLLECTING:
         return STATUS_ACTIVE
     if running and device.monitoring_state in AGENT_PAUSED_STATES:
         return STATUS_PAUSED
+    if waiting:
+        return STATUS_STARTING
     if pending or device.last_error_code:
         return STATUS_ERROR  # the start ran out before the agent confirmed it, or the agent reports an error
     return STATUS_READY

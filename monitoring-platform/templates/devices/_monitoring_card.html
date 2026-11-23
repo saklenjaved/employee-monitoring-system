@@ -5,7 +5,7 @@
   <div class="pc-card-head">
     <div>
       <h2>Approve this PC?</h2>
-      <p class="muted">Your PC is asking to connect for monitoring.</p>
+      <p class="muted">WinAgent is installed on your PC and is asking to connect for monitoring. Approve it to activate.</p>
     </div>
     <span class="status wait">Needs your approval</span>
   </div>
@@ -30,11 +30,14 @@
   </div>
   <p>Install WinAgent on your PC. When it connects, an <strong>Approve this PC</strong> button appears here. Enter your password once.</p>
   <ol class="stages" aria-label="Connection steps">
-    <li data-step="1" class="{% if waiting_pcs %}done{% else %}current{% endif %}" {% if not waiting_pcs %}aria-current="step"{% endif %}>Download WinAgent</li>
+    <li data-step="1" class="{% if waiting_pcs or setup_open %}done{% else %}current{% endif %}" {% if not waiting_pcs and not setup_open %}aria-current="step"{% endif %}>Download WinAgent</li>
     <li data-step="2" class="{% if waiting_pcs %}done{% else %}current{% endif %}" {% if not waiting_pcs %}aria-current="step"{% endif %}>Install WinAgent</li>
     <li data-step="3" class="{% if waiting_pcs %}current{% endif %}" {% if waiting_pcs %}aria-current="step"{% endif %}>Approve this PC</li>
     <li data-step="4">PC connected</li>
   </ol>
+  {% if setup_open and not waiting_pcs %}
+  <p><strong>Waiting for WinAgent.</strong> Open the downloaded <strong>WinAgentSetup</strong> file on your PC. This page updates by itself and shows an <strong>Approve this PC</strong> button as soon as WinAgent is installed.</p>
+  {% endif %}
   {% if not waiting_pcs %}
   <form method="post" action="{% url 'install_package' %}" class="pc-action">
     {% csrf_token %}
@@ -68,7 +71,12 @@
     <li data-step="1" class="done">Download WinAgent</li>
     <li data-step="2" class="done">Install WinAgent</li>
     <li data-step="3" class="done">Approve this PC</li>
-    <li data-step="4" class="{% if monitoring == 'monitoring_active' %}done{% else %}current{% endif %}" {% if monitoring != 'monitoring_active' %}aria-current="step"{% endif %}>PC connected</li>
+    {# Done once the agent has confirmed it is running: collecting, or holding the start but paused (outside hours or a remote session). #}
+    {% if monitoring == 'monitoring_active' or monitoring == 'monitoring_paused' %}
+    <li data-step="4" class="done">PC connected</li>
+    {% else %}
+    <li data-step="4" class="current" aria-current="step">PC connected</li>
+    {% endif %}
   </ol>
 
   {% if approved_pc %}

@@ -5,14 +5,17 @@
   <h1>Platform</h1>
   <p class="muted">Counts only. Employee monitoring data is not shown here.</p>
   <div class="tiles">
-    <div class="tile"><span class="tile-value">{{ report.organization_count }}</span><span class="tile-label">Organizations</span></div>
-    <div class="tile"><span class="tile-value">{{ report.active_organization_count }}</span><span class="tile-label">Active</span></div>
-    <div class="tile"><span class="tile-value">{{ report.inactive_organization_count }}</span><span class="tile-label">Inactive</span></div>
+    <div class="tile"><a href="{% url 'organization_list' %}"><span class="tile-value">{{ report.organization_count }}</span><span class="tile-label">Organizations ({{ report.active_organization_count }} active, {{ report.inactive_organization_count }} inactive)</span></a></div>
+    <div class="tile"><a href="{% url 'admin_list' %}"><span class="tile-value">{{ report.admin_count }}</span><span class="tile-label">Total Admins</span></a></div>
+    <div class="tile"><a href="{% url 'admin_list' %}?status=active"><span class="tile-value">{{ report.active_admin_count }}</span><span class="tile-label">Active Admins</span></a></div>
+    <div class="tile"><a href="{% url 'admin_list' %}?status=pending"><span class="tile-value">{{ report.pending_admin_count }}</span><span class="tile-label">Pending invitations</span></a></div>
     <div class="tile"><span class="tile-value">{{ report.employee_count }}</span><span class="tile-label">Employees</span></div>
-    <div class="tile"><span class="tile-value">{{ report.admin_count }}</span><span class="tile-label">Admin accounts</span></div>
     <div class="tile"><span class="tile-value">{{ report.online_count }} / {{ report.device_count }}</span><span class="tile-label">Agents online</span></div>
   </div>
-  <p><a class="button" href="{% url 'organization_list' %}">Manage organizations</a></p>
+  <p>
+    <a class="button" href="{% url 'organization_list' %}">Manage organizations</a>
+    <a class="button secondary" href="{% url 'admin_list' %}">Manage Admins</a>
+  </p>
 </div>
 <div class="card">
   <h2>Organizations</h2>
@@ -21,15 +24,37 @@
     {% for org in report.organizations %}
       <tr>
         <td>{{ org.name }}</td>
-        <td>{% if org.is_active %}Active{% else %}Deactivated{% endif %}</td>
+        <td>{% if org.is_active %}<span class="status ok">Active</span>{% else %}<span class="status bad">Deactivated</span>{% endif %}</td>
         <td>{{ org.employee_count }}</td>
-        <td>{{ org.admin_count }}</td>
+        <td><a href="{% url 'admin_list' %}?organization={{ org.pk }}">{{ org.admin_count }}</a></td>
         <td>{{ org.online_count }} / {{ org.device_count }}</td>
       </tr>
     {% empty %}
       <tr><td colspan="5" class="muted">No organizations yet.</td></tr>
     {% endfor %}
   </table>
+</div>
+<div class="card">
+  <h2>Latest Admins</h2>
+  <table>
+    <tr><th>Name</th><th>Email</th><th>Organization</th><th>Status</th><th>Created</th></tr>
+    {% for admin in report.recent_admins %}
+      <tr>
+        <td>{{ admin.full_name }}</td>
+        <td>{{ admin.email }}</td>
+        <td>{{ admin.organization.name|default:"-" }}</td>
+        <td>
+          {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
+          {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
+          {% else %}<span class="status bad">Inactive</span>{% endif %}
+        </td>
+        <td>{{ admin.date_joined|date:"j M Y" }}</td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="5" class="muted">No Admin accounts yet.</td></tr>
+    {% endfor %}
+  </table>
+  {% if report.recent_admins %}<p><a href="{% url 'admin_list' %}">View all Admins</a></p>{% endif %}
 </div>
 <div class="card">
   <h2>Recent administrative activity</h2>

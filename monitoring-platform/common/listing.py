@@ -74,6 +74,7 @@ def build_listing(
         )
 
     return {
+        "rows": rows,  # every row after search, filters and sorting, before paging
         "page": Paginator(rows, PAGE_SIZE).get_page(request.GET.get("page")),
         "columns": headers,
         "filters": active_filters,

@@ -1,6 +1,7 @@
 """The audit log page. Admins see their own organization; the Super Admin sees every organization.
 
-Audit entries are read-only here. Nothing on this page can change or delete them.
+Audit entries can never be changed. Admins can only read them. Only the Super Admin can delete entries,
+one at a time or in bulk, and every deletion leaves a permanent AuditDeletion record.
 
 Times are stored in UTC. They are converted to settings.DISPLAY_TIMEZONE once, here, when the page is built.
 """
@@ -8,17 +9,23 @@ from datetime import date, datetime, time, timedelta
 from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
+from types import SimpleNamespace
+
 from django.conf import settings
-from django.shortcuts import render
+from django.contrib import messages
+from django.shortcuts import redirect, render
+from django.urls import reverse
 from django.utils import timezone
 from django.utils.timesince import timesince
+from django.views.decorators.http import require_POST
 
 from access_control.permissions import role_required
 from accounts.models import Role
 from common.listing import Column, Filter, build_listing
 from organizations.models import Organization
 
-from .models import AuditLog
+from .models import AuditDeletion, AuditLog
+from .services import delete_entries
 
 DISPLAY_ZONE = ZoneInfo(settings.DISPLAY_TIMEZONE)
 
@@ -119,9 +126,12 @@ def _show(entry):
     return entry
 
 
-@role_required(Role.ADMIN, Role.SUPER_ADMIN)
-def audit_log_list(request):
-    viewer = request.user
+def _build_listing(request, viewer):
+    """The filtered, searched and sorted entries for `request.GET`. Returns (listing, visible, date_error).
+
+    The list page and the delete action both call this, so "every entry matching the filters" always means
+    exactly what the page shows. `visible` is the viewer's whole log, before any filter.
+    """
     visible = entries_for(viewer)
     start, end, date_error = _date_range(request)
     entries = visible.select_related("organization")
@@ -151,6 +161,13 @@ def audit_log_list(request):
         default_sort="when",
         default_descending=True,
     )
+    return listing, visible, date_error
+
+
+@role_required(Role.ADMIN, Role.SUPER_ADMIN)
+def audit_log_list(request):
+    viewer = request.user
+    listing, visible, date_error = _build_listing(request, viewer)
     page = listing["page"]
     page.object_list = [_show(entry) for entry in page.object_list]
     # The pager keeps the date range too, so the next page shows the same dates.
@@ -159,15 +176,56 @@ def audit_log_list(request):
         listing["querystring"] = f"{listing['querystring']}&{urlencode(dates)}" if listing["querystring"] else urlencode(dates)
     listing["filtered"] = listing["filtered"] or bool(dates)
 
-    return render(
-        request,
-        "audit/log_list.html",
-        {
-            "listing": listing,
-            "summary": _summary(visible),
-            "date_from": request.GET.get("from", ""),
-            "date_to": request.GET.get("to", ""),
-            "date_error": date_error,
-            "zone_label": datetime.now(DISPLAY_ZONE).strftime("%Z"),
-        },
-    )
+    context = {
+        "listing": listing,
+        "summary": _summary(visible),
+        "date_from": request.GET.get("from", ""),
+        "date_to": request.GET.get("to", ""),
+        "date_error": date_error,
+        "zone_label": datetime.now(DISPLAY_ZONE).strftime("%Z"),
+        "can_delete": viewer.role == Role.SUPER_ADMIN,
+    }
+    if context["can_delete"]:
+        context["deletions"] = AuditDeletion.objects.all()[:10]
+    return render(request, "audit/log_list.html", context)
+
+
+KEPT_QUERY_KEYS = ("q", "action", "status", "organization", "from", "to", "sort", "dir")
+
+
+@role_required(Role.SUPER_ADMIN)
+@require_POST
+def audit_log_delete(request):
+    """Delete audit entries. Only the Super Admin gets here (the decorator, not the hidden buttons, enforces it).
+
+    One entry ("single"), the ticked entries ("selected"), or every entry matching the filters ("matching").
+    """
+    keep = {key: request.POST[key] for key in KEPT_QUERY_KEYS if request.POST.get(key)}
+    back = reverse("audit_log_list") + (f"?{urlencode(keep)}" if keep else "")
+    single = request.POST.get("single", "")
+    if single:
+        method, ids = "single", [single]
+    elif request.POST.get("select_matching") == "1":
+        # The filters travel with the form. A bad date range is refused, so it never deletes more than the page showed.
+        listing, _, date_error = _build_listing(SimpleNamespace(GET=request.POST), request.user)
+        if date_error:
+            messages.error(request, date_error)
+            return redirect(back)
+        method, ids = "matching", None
+    else:
+        method, ids = "selected", request.POST.getlist("entry")
+    if method == "matching":
+        entries = listing["rows"]
+    else:
+        valid_ids = [int(value) for value in ids if str(value).isdigit()]
+        if not valid_ids:
+            messages.error(request, "Select at least one audit entry to delete.")
+            return redirect(back)
+        entries = AuditLog.objects.filter(pk__in=valid_ids)
+    deleted = delete_entries(request.user, entries, method)
+    if deleted:
+        noun = "entry" if deleted == 1 else "entries"
+        messages.success(request, f"Deleted {deleted} audit {noun}. The deletion was recorded.")
+    else:
+        messages.info(request, "Nothing was deleted.")
+    return redirect(back)

@@ -96,7 +96,7 @@ Phase 1 (below) added:
 - `organizations`: the `Organization` model. The Super Admin can create, activate and deactivate organizations and create Admin accounts (pages under `/platform/organizations/`).
 - `accounts`: the `User` model (email login, four roles, organization link), login, logout, password reset by email, and the user visibility rules in `services.py`.
 - `access_control`: the `role_required` decorator. Every protected view uses it.
-- `audit`: an append-only `AuditLog` and `record_event()`. Organization and Admin-account actions are recorded.
+- `audit`: an `AuditLog` that is never edited, and `record_event()`. Organization and Admin-account actions are recorded. Only the Super Admin can delete entries (single or bulk, from the Audit logs page), through `delete_entries()`, and every deletion leaves a permanent `AuditDeletion` record (who, when, how many).
 - Tests cover tenant isolation, role checks, login, password reset, and audit.
 
 After the Phase 1 and 2 reviews (privacy and permission), these were fixed:
@@ -234,6 +234,8 @@ The Admin can also create a code themselves ("Create registration code" on the e
 
 The API address in the block comes from `AGENT_BASE_URL` (and `AGENT_CA_BUNDLE`). In development the defaults point at the local HTTPS server (`scripts\run_https.ps1`). Only a PC that can reach that address can connect, so real employee PCs need a deployed server with a real certificate and `AGENT_BASE_URL` set to it.
 
+The browser is sent to the website itself, not to the API address. After install the agent opens the `dashboard_url` the server returns, built from `SITE_URL`. `SITE_URL` defaults to `RENDER_EXTERNAL_URL` on Render and to `http://127.0.0.1:8000` in development, so the local HTTPS API with its private certificate is never opened in a browser.
+
 ## Create the first Super Admin
 
 ```powershell
@@ -254,7 +256,8 @@ All secrets come from environment variables:
 | `DJANGO_SECRET_KEY` | Required unless debug or tests. |
 | `DJANGO_ALLOWED_HOSTS` | Comma-separated hosts. Default `localhost,127.0.0.1`. |
 | `DB_ENGINE` | `postgres` or empty for SQLite. |
-| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL` | SMTP settings for invitation and password-reset emails. Set `EMAIL_HOST` to send real mail (Gmail for local development: see `.env.example`). Without it, sending fails and the app shows that the email could not be sent (development shows a startup warning). Outside development, `EMAIL_HOST` and a real `DEFAULT_FROM_EMAIL` are required. |
+| `BREVO_API_KEY`, `DEFAULT_FROM_EMAIL` | Email over Brevo's HTTPS API, for invitation, activation and password-reset emails. Use this on Render Free, which blocks SMTP. `DEFAULT_FROM_EMAIL` must be a sender verified in Brevo (`name@example.com` or `Name <name@example.com>`). When `BREVO_API_KEY` is set, the SMTP variables below are not used. A refused message is logged with Brevo's status, error code and a short message, never the key or an address. |
+| `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_TIMEOUT` | SMTP settings, used only when `BREVO_API_KEY` is not set (Gmail for local development: see `.env.example`). `EMAIL_TIMEOUT` is the wait in seconds (default 10). Without `BREVO_API_KEY` or `EMAIL_HOST`, sending fails and the app shows that the email could not be sent (development shows a startup warning). Outside development, one of them and a real `DEFAULT_FROM_EMAIL` are required. |
 | `.env` file | Optional. Put local values such as the Gmail app password in `monitoring-platform/.env` (copy `.env.example`). It is git-ignored. Real environment variables take precedence. |
 | `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` | PostgreSQL connection. The development defaults match `docker-compose.yml`. |
 
@@ -269,24 +272,25 @@ Create a PostgreSQL database and a Python web service from the Git repository:
 | Root directory | `monitoring-platform` |
 | Build command | `pip install -r requirements.txt && python manage.py collectstatic --noinput` |
 | Pre-deploy command | Not available on the Free plan. Leave empty. |
-| Start command | `sh -c "python manage.py migrate --noinput && python manage.py create_initial_superadmin && hypercorn config.asgi:application --bind 0.0.0.0:$PORT"` |
+| Start command | `sh -c "python manage.py migrate --noinput && python manage.py create_initial_superadmin && (python manage.py build_summaries --every 300 &) && exec hypercorn config.asgi:application --bind 0.0.0.0:$PORT"` |
 | Health check path | `/login/` |
 
-On the Free plan the start command runs the migrations and the Super Admin step before the server starts. Both are safe to repeat: `migrate` only applies changes that have not run yet, and `create_initial_superadmin` does nothing once a Super Admin exists. After the first successful start, delete `INITIAL_SUPERADMIN_PASSWORD` from Render, so that a Super Admin deleted later is not recreated with a known password.
+On the Free plan the start command runs the migrations and the Super Admin step before the server starts. Both are safe to repeat: `migrate` only applies changes that have not run yet, and `create_initial_superadmin` does nothing once a Super Admin exists. It also starts `build_summaries --every 300` in the background, because cron jobs are not available on the Free plan and the dashboards' daily totals are only built by that command. The agents' check-ins keep the free service awake, so the loop keeps running while PCs are connected. After the first successful start, delete `INITIAL_SUPERADMIN_PASSWORD` from Render, so that a Super Admin deleted later is not recreated with a known password.
 
 Environment variables for the web service:
 - `DJANGO_DEBUG=0` and `DJANGO_SECRET_KEY` (a long random value).
 - `DATABASE_URL`: the database's internal connection string (Render fills it in).
 - `AGENT_BASE_URL=https://<service>.onrender.com/api/agent/v1` (the address the agent installer uses).
 - `INITIAL_SUPERADMIN_EMAIL` and `INITIAL_SUPERADMIN_PASSWORD`: create the first Super Admin without a shell. The step runs only when no Super Admin exists, so it never makes a duplicate. Optional `INITIAL_SUPERADMIN_NAME`. After the first successful deploy, delete `INITIAL_SUPERADMIN_PASSWORD` from Render.
-- `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USE_TLS`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `DEFAULT_FROM_EMAIL`.
+- `BREVO_API_KEY` and `DEFAULT_FROM_EMAIL` (a sender verified in Brevo): email over HTTPS. Render Free blocks SMTP, so `EMAIL_HOST` cannot be used there. Without a key or `EMAIL_HOST`, the production start check fails.
+- `PYTHON_VERSION` (for example `3.13.5`): pin the Python version, so Render does not pick a newer one than Django supports.
 - `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY` for screenshots (private bucket).
 
 Render sets `RENDER_EXTERNAL_HOSTNAME` and `RENDER_EXTERNAL_URL` itself; the settings use them for allowed hosts and trusted origins.
 
-Scheduled jobs (Render cron jobs, same root directory and environment variables):
+Scheduled jobs. On the Free plan `build_summaries` already runs from the start command above. On a paid plan you can use Render cron jobs instead (same root directory and environment variables):
 - `python manage.py build_summaries`, every 5 minutes (dashboard totals).
-- `python manage.py cleanup_screenshots`, once a day (screenshot retention).
+- `python manage.py cleanup_screenshots`, once a day (screenshot retention). This one is not started by the start command; run it from a cron job or occasionally by hand.
 
 Before the first real use, check: static files load (CSS and charts), the WinAgent installer is built with the Render address (`WINAGENT_API_URL`, and no local `WINAGENT_CA_FILE`) and is served from `agent_dist`, and screenshots upload to S3.
 

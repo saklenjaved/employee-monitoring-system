@@ -10,11 +10,44 @@ from django.views.decorators.http import require_POST
 
 from access_control.permissions import role_required
 from accounts.models import MembershipStatus, Role, User
-from accounts.services import create_organization_admin, resend_invite
+from accounts.services import create_organization_admin, platform_admins, resend_invite
+from common.listing import Column, Filter, build_listing
 
 from .forms import AdminAccountForm, OrganizationForm
 from .models import Organization
 from .services import create_organization, set_organization_active
+
+
+ADMIN_COLUMNS = (
+    Column("Name", "name", "full_name", True),
+    Column("Email", "email", "email", True),
+    Column("Organization", "organization", "organization__name", True),
+    Column("Status", "status", "admin_status"),
+    Column("Created", "created", "date_joined"),
+    Column(""),
+)
+ADMIN_STATUS_CHOICES = [("active", "Active"), ("pending", "Pending"), ("inactive", "Inactive")]
+
+
+@role_required(Role.SUPER_ADMIN)
+def admin_list(request):
+    """Every Admin account across all organizations, with search and filters."""
+    organization_choices = [(str(org.pk), org.name) for org in Organization.objects.order_by("name")]
+    listing = build_listing(
+        request,
+        platform_admins(request.user),
+        ADMIN_COLUMNS,
+        search_fields=("full_name", "email", "organization__name"),
+        filters=(
+            Filter("status", "Status", ADMIN_STATUS_CHOICES, lambda rows, value: rows.filter(admin_status=value)),
+            Filter(
+                "organization", "Organization", organization_choices, lambda rows, value: rows.filter(organization_id=value)
+            ),
+        ),
+        default_sort="created",
+        default_descending=True,
+    )
+    return render(request, "organizations/admin_list.html", {"listing": listing})
 
 
 @role_required(Role.SUPER_ADMIN)
@@ -49,7 +82,7 @@ def organization_set_active(request, pk):
 @role_required(Role.SUPER_ADMIN)
 def organization_admin_create(request, pk):
     organization = get_object_or_404(Organization, pk=pk)
-    form = AdminAccountForm(request.POST or None)
+    form = AdminAccountForm(organization, request.POST or None)
     if request.method == "POST" and form.is_valid():
         user, email_sent = create_organization_admin(
             request.user,

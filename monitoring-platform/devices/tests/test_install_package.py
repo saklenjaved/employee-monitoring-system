@@ -5,6 +5,8 @@ from datetime import timedelta
 from pathlib import Path
 
 from django.core.cache import cache
+from django.core.signals import request_finished
+from django.db import close_old_connections
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -37,8 +39,22 @@ class InstallPackageTests(TestCase):
     def download(self, secure=True, consent="yes"):
         data = {"consent": consent} if consent else {}
         response = self.client.post(reverse("install_package"), data, secure=secure)
-        self.addCleanup(response.close)  # the open file must close before the temp folder is removed (Windows)
+        self.addCleanup(self.close_without_closing_the_database, response)
         return response
+
+    @staticmethod
+    def close_without_closing_the_database(response):
+        """Close the open file before the temp folder is removed (Windows).
+
+        Closing a response sends request_finished, which closes the database connection. Inside a test's
+        transaction that breaks the next query on PostgreSQL, so the signal handler is paused, as Django's own
+        test client does.
+        """
+        request_finished.disconnect(close_old_connections)
+        try:
+            response.close()
+        finally:
+            request_finished.connect(close_old_connections)
 
     def with_installer(self):
         return override_settings(AGENT_INSTALLER_PATH=str(self.installer))

@@ -17,6 +17,7 @@ from django.utils import timezone
 from django.utils.timesince import timesince
 
 from accounts.models import Role, User
+from accounts.services import platform_admins
 from audit.models import AuditLog
 from devices.models import Device, MonitoringStart
 from devices.services import sync_state, sync_status
@@ -293,6 +294,12 @@ def platform_report(viewer):
         .select_related("organization")
         .order_by("-created_at", "-id")[:15]
     )
+    admins = platform_admins(viewer)
+    admin_totals = admins.aggregate(
+        active=Count("pk", filter=Q(admin_status="active")),
+        pending=Count("pk", filter=Q(admin_status="pending")),
+        inactive=Count("pk", filter=Q(admin_status="inactive")),
+    )
     return {
         "organizations": organizations,
         "organization_count": len(organizations),
@@ -300,6 +307,10 @@ def platform_report(viewer):
         "inactive_organization_count": sum(1 for org in organizations if not org.is_active),
         "employee_count": sum(org.employee_count for org in organizations),
         "admin_count": sum(org.admin_count for org in organizations),
+        "active_admin_count": admin_totals["active"],
+        "pending_admin_count": admin_totals["pending"],
+        "inactive_admin_count": admin_totals["inactive"],
+        "recent_admins": list(admins.order_by("-date_joined", "-pk")[:5]),
         "device_count": sum(org.device_count for org in organizations),
         "online_count": sum(org.online_count for org in organizations),
         "recent_activity": recent,

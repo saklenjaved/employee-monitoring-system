@@ -253,11 +253,17 @@ class ConfigTests(AgentApiTestCase):
         self.assertEqual(response.status_code, 200)
         data = response.json()
         self.assertEqual(set(data), {"policy_version", "monitoring", "activity", "screenshots", "exclusions"})
-        self.assertEqual(set(data["monitoring"]), {"enabled", "days", "start", "end"})
+        self.assertEqual(set(data["monitoring"]), {"enabled", "days", "start", "end", "timezone"})
         self.assertTrue(all(isinstance(day, int) and 0 <= day <= 6 for day in data["monitoring"]["days"]))
         self.assertRegex(data["monitoring"]["start"], r"^([01]\d|2[0-3]):[0-5]\d$")
         self.assertRegex(data["monitoring"]["end"], r"^([01]\d|2[0-3]):[0-5]\d$")
         self.assertIs(data["screenshots"]["enabled"], False)
+
+    def test_the_monitoring_hours_come_with_their_time_zone(self):
+        # The agent checks the hours in this zone, the same way the server checks them before accepting a screenshot.
+        monitoring_services.update_policy(self.admin_a, self.org_a, {"timezone": "Asia/Kolkata"})
+        self.authenticate(self.register()["credential"])
+        self.assertEqual(self.api.get(CONFIG_URL).json()["monitoring"]["timezone"], "Asia/Kolkata")
 
     def test_each_device_gets_the_policy_of_its_own_organization(self):
         monitoring_services.update_policy(

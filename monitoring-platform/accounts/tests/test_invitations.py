@@ -95,17 +95,28 @@ class InvitationRuleTests(TestCase):
         self.assertContains(response, "Please enter a correct")
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_an_existing_person_keeps_their_password_and_gets_only_a_new_membership(self):
+    def test_a_person_invited_back_to_the_same_organization_reuses_their_account(self):
         person = make_user("back@a.test", Role.EMPLOYEE, self.org_a)
         old = person.memberships.get()
         old.status, old.end_reason = MembershipStatus.ENDED, "removed"
         old.save()
-        user, membership, _ = invite(self.admin_a, self.org_b, "back@a.test", Role.EMPLOYEE)
+        user, membership, _ = invite(self.admin_a, self.org_a, "back@a.test", Role.EMPLOYEE)
         user.refresh_from_db()
+        self.assertEqual(user.pk, person.pk)
         self.assertTrue(user.check_password(PASSWORD))
         self.assertEqual(User.objects.filter(email="back@a.test").count(), 1)
-        self.assertEqual(membership.organization, self.org_b)
         self.assertEqual(user.memberships.count(), 2)
+
+    def test_an_email_from_another_organization_gets_a_separate_account(self):
+        person = make_user("back@a.test", Role.EMPLOYEE, self.org_a)
+        user, membership, _ = invite(self.super_admin, self.org_b, "back@a.test", Role.EMPLOYEE)
+        self.assertNotEqual(user.pk, person.pk)
+        self.assertEqual((user.organization, membership.organization), (self.org_b, self.org_b))
+        self.assertFalse(user.has_usable_password())  # its own password is chosen at activation
+        self.assertEqual(User.objects.filter(email="back@a.test").count(), 2)
+        person.refresh_from_db()
+        self.assertTrue(person.check_password(PASSWORD))
+        self.assertEqual(person.memberships.get().status, MembershipStatus.ACTIVE)
 
     def test_a_second_open_invitation_in_the_same_organization_is_refused(self):
         invite(self.admin_a, self.org_a, "twice@a.test", Role.EMPLOYEE)
@@ -113,12 +124,11 @@ class InvitationRuleTests(TestCase):
             invite(self.admin_a, self.org_a, "twice@a.test", Role.EMPLOYEE)
         self.assertEqual(Membership.objects.filter(user__email="twice@a.test").count(), 1)
 
-    def test_an_active_membership_elsewhere_is_refused_with_a_generic_message(self):
+    def test_an_active_account_elsewhere_does_not_block_or_change_anything(self):
         person = make_user("busy@a.test", Role.EMPLOYEE, self.org_a)
-        with self.assertRaisesMessage(ValueError, REFUSED_MESSAGE):
-            invite(self.admin_a, self.org_b, "busy@a.test", Role.EMPLOYEE)
-        self.assertEqual(person.memberships.count(), 1)
-        self.assertFalse(Membership.objects.filter(organization=self.org_b).exists())
+        user, _, _ = invite(self.super_admin, self.org_b, "busy@a.test", Role.EMPLOYEE)
+        self.assertEqual(person.memberships.count(), 1)  # the account in organization A is not touched
+        self.assertEqual(Membership.objects.get(organization=self.org_b).user, user)
 
     def test_the_super_admin_cannot_be_invited(self):
         with self.assertRaisesMessage(ValueError, REFUSED_MESSAGE):
@@ -235,6 +245,10 @@ class EmailSettingsCheckTests(SimpleTestCase):
     def test_production_with_the_placeholder_sender_is_an_error(self):
         errors = self.check(DEV_MODE=False, EMAIL_HOST="smtp.acme.test", DEFAULT_FROM_EMAIL="no-reply@example.invalid")
         self.assertEqual([error.id for error in errors], ["accounts.E001"])
+
+    def test_production_with_the_https_mail_api_and_sender_passes(self):
+        values = dict(DEV_MODE=False, EMAIL_HOST="", BREVO_API_KEY="key", DEFAULT_FROM_EMAIL="hello@acme.test")
+        self.assertEqual(self.check(**values), [])
 
     def test_production_with_a_mail_server_and_sender_passes(self):
         self.assertEqual(self.check(DEV_MODE=False, EMAIL_HOST="smtp.acme.test", DEFAULT_FROM_EMAIL="hello@acme.test"), [])

@@ -97,13 +97,30 @@ class OrganizationManagementTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertNotIn("_auth_user_id", self.client.session)
 
-    def test_duplicate_admin_email_is_rejected(self):
+    def test_duplicate_admin_email_in_the_same_organization_is_rejected(self):
         self.client.force_login(self.super_admin)
-        url = reverse("organization_admin_create", args=[self.org_b.pk])
+        url = reverse("organization_admin_create", args=[self.org_a.pk])
         response = self.client.post(url, {"email": "ADMIN@a.test", "full_name": "Copy"})
         self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "already exists in this organization")
         self.assertEqual(User.objects.filter(email="admin@a.test").count(), 1)
         self.assertEqual(len(mail.outbox), 0)
+
+    def test_the_same_admin_email_is_allowed_in_another_organization(self):
+        self.client.force_login(self.super_admin)
+        url = reverse("organization_admin_create", args=[self.org_b.pk])
+        response = self.client.post(url, {"email": "ADMIN@a.test", "full_name": "Admin B"})
+        self.assertRedirects(response, reverse("organization_list"))
+        accounts = User.objects.filter(email="admin@a.test").order_by("pk")
+        self.assertEqual([account.organization for account in accounts], [self.org_a, self.org_b])
+        self.assertEqual(len(mail.outbox), 1)
+
+    def test_the_super_admin_email_cannot_be_given_to_an_organization_admin(self):
+        self.client.force_login(self.super_admin)
+        url = reverse("organization_admin_create", args=[self.org_b.pk])
+        response = self.client.post(url, {"email": self.super_admin.email, "full_name": "Copy"})
+        self.assertContains(response, "This email cannot be used.")
+        self.assertEqual(User.objects.filter(email=self.super_admin.email).count(), 1)
 
     def test_admin_of_one_organization_cannot_manage_organizations(self):
         self.client.force_login(self.admin_a)

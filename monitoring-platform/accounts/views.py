@@ -87,9 +87,11 @@ class LimitedLoginView(auth_views.LoginView):
         return super().post(request, *args, **kwargs)
 
     def form_invalid(self, form):
-        email_key, ip_key = self._keys(self.request)
-        hit(email_key, LOGIN_WINDOW_SECONDS)
-        hit(ip_key, LOGIN_WINDOW_SECONDS)
+        # Being asked to choose an organization is not a failed attempt: the password was right.
+        if not form.needs_organization:
+            email_key, ip_key = self._keys(self.request)
+            hit(email_key, LOGIN_WINDOW_SECONDS)
+            hit(ip_key, LOGIN_WINDOW_SECONDS)
         return super().form_invalid(form)
 
     def form_valid(self, form):

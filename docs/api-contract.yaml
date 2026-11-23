@@ -199,6 +199,9 @@ paths:
                   request_id: { type: string, format: uuid }
                   poll_token: { type: string }
                   expires_at: { type: string, format: date-time }
+                  # Optional. The employee's dashboard on the website itself (http or https). The agent opens it in the
+                  # browser once. It is not derived from the API address, which may not be trusted by a browser.
+                  dashboard_url: { type: string }
         '400': { $ref: '#/components/responses/Error' }
         '429': { description: Rate limited. Retry with backoff. }
   /pairing/requests/{request_id}/:
@@ -290,6 +293,9 @@ components:
             days: { type: array, items: { type: integer, minimum: 0, maximum: 6 }, description: 'Monday=0' }
             start: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
             end: { type: string, pattern: '^([01]\d|2[0-3]):[0-5]\d$' }
+            # Optional. IANA time zone of start/end and days (for example "UTC", "Asia/Kolkata"). The agent checks
+            # the hours in this zone, as the server does before it accepts a screenshot. Missing: device local time.
+            timezone: { type: string }
         activity:
           type: object
           properties:

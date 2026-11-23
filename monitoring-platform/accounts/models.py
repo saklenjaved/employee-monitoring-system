@@ -28,13 +28,20 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("role", Role.SUPER_ADMIN)
         extra_fields.setdefault("is_staff", True)
         extra_fields.setdefault("is_superuser", True)
+        # A Super Admin's email is global: no other account in any organization may use it.
+        if self.model.objects.filter(email=(email or "").strip().lower()).exists():
+            raise ValueError("An account with this email already exists.")
         return self.create_user(email, password, **extra_fields)
 
 
 class User(AbstractBaseUser, PermissionsMixin):
-    """A person who logs in to the web app. Login uses the email address."""
+    """A person's account in one organization. Login uses the email address.
 
-    email = models.EmailField(unique=True)
+    The same email may have a separate account (own password and status) in each organization, but only one
+    in the same organization. The Super Admin has no organization, and that email is unique across the platform.
+    """
+
+    email = models.EmailField()
     full_name = models.CharField(max_length=200)
     role = models.CharField(max_length=20, choices=Role.choices, default=Role.EMPLOYEE)
     # Empty only for the Super Admin. Everyone else belongs to exactly one organization.
@@ -57,6 +64,10 @@ class User(AbstractBaseUser, PermissionsMixin):
     class Meta:
         ordering = ["email"]
         constraints = [
+            # One account per email in an organization. The same email can exist in other organizations.
+            models.UniqueConstraint(fields=["email", "organization"], name="unique_email_per_organization"),
+            # The Super Admin has no organization, so the rule above does not cover it: its email is global.
+            models.UniqueConstraint(fields=["email"], condition=Q(role="super_admin"), name="unique_super_admin_email"),
             # Super Admin has no organization; every other role must have one.
             models.CheckConstraint(
                 condition=(

@@ -255,10 +255,15 @@ class PersonTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(User.objects.filter(email="new@a.test").count(), 1)
 
-    def test_email_message_does_not_reveal_accounts_of_other_organizations(self):
+    def test_an_email_used_in_another_organization_gets_a_separate_account_here(self):
         response = self.create(email="admin@b.test")  # exists in organization B
-        self.assertContains(response, "This email cannot be used.")
-        self.assertNotContains(response, "already exists")
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(User.objects.filter(email="admin@b.test").count(), 2)
+
+    def test_a_duplicate_email_in_this_organization_says_so(self):
+        self.create()
+        response = self.create(employee_code="E-2")
+        self.assertContains(response, "A person with this email already exists in your organization.")
 
     def test_employee_code_is_unique_inside_one_organization_only(self):
         self.create()

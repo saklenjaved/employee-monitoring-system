@@ -1,6 +1,6 @@
 from django import forms
 
-from accounts.models import User
+from accounts.models import Role, User
 
 from .models import Organization
 
@@ -15,8 +15,15 @@ class AdminAccountForm(forms.Form):
     email = forms.EmailField()
     full_name = forms.CharField(max_length=200)
 
+    def __init__(self, organization, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.organization = organization
+
     def clean_email(self):
+        # The same email may have an account in another organization; only this organization must not have one.
         email = self.cleaned_data["email"].strip().lower()
-        if User.objects.filter(email=email).exists():
-            raise forms.ValidationError("An account with this email already exists.")
+        if User.objects.filter(email=email, organization=self.organization).exists():
+            raise forms.ValidationError("An account with this email already exists in this organization.")
+        if User.objects.filter(email=email, role=Role.SUPER_ADMIN).exists():
+            raise forms.ValidationError("This email cannot be used.")
         return email

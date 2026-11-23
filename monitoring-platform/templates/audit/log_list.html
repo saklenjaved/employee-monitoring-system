@@ -46,6 +46,14 @@
   .al-footer p { margin: 0; }
   .al-empty { text-align: center; padding: 36px 20px; }
   .al-empty p { margin: 0 auto; max-width: 440px; }
+  .al-bulk { display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; padding: 10px 16px; border-bottom: 1px solid var(--c-border); background: var(--c-bg); font-size: .92em; }
+  .al-bulk .al-count { font-variant-numeric: tabular-nums; }
+  .al-bulk button { height: 36px; padding: 0 14px; box-sizing: border-box; }
+  .al-bulk button[disabled] { opacity: .5; cursor: not-allowed; box-shadow: none; }
+  .al-check { width: 36px; padding-right: 0 !important; }
+  .al-row-delete { height: 32px; padding: 0 12px; font-size: .85em; }
+  .al-history { margin-top: 18px; }
+  .al-history h2 { font-size: 1.05em; margin: 0; padding: 14px 16px; border-bottom: 1px solid var(--c-border); }
   @media (max-width: 760px) {
     .al-table thead { display: none; }
     .al-table, .al-table tbody, .al-table tr, .al-table td { display: block; width: 100%; }
@@ -59,7 +67,7 @@
 <header class="al-head">
   <div>
     <h1>Audit logs</h1>
-    <p class="muted">Every important activity in your organization is recorded here: account changes, monitoring, devices and access to screenshots. Entries cannot be changed or removed.</p>
+    {% if can_delete %}<p class="muted">Every important activity in every organization is recorded here: account changes, monitoring, devices and access to screenshots. Entries cannot be changed. As Super Admin you can delete entries; each deletion is recorded permanently.</p>{% else %}<p class="muted">Every important activity in your organization is recorded here: account changes, monitoring, devices and access to screenshots. Entries cannot be changed or removed.</p>{% endif %}
   </div>
   <p class="al-total"><strong>{{ summary.total }}</strong> event{{ summary.total|pluralize }} recorded</p>
 </header>
@@ -113,14 +121,33 @@
   </form>
   {% if date_error %}<p class="al-error" role="alert">{{ date_error }}</p>{% endif %}
 
+  {% if can_delete %}
+  <form method="post" action="{% url 'audit_log_delete' %}" id="al-delete-form" data-confirm="Delete the selected audit entries permanently?" data-confirm-label="Delete" data-confirm-danger>
+    {% csrf_token %}
+    <input type="hidden" name="q" value="{{ listing.query }}">
+    <input type="hidden" name="action" value="{{ listing.filters.0.selected }}">
+    <input type="hidden" name="status" value="{{ listing.filters.1.selected }}">
+    <input type="hidden" name="organization" value="{{ listing.filters.2.selected }}">
+    <input type="hidden" name="from" value="{{ date_from }}">
+    <input type="hidden" name="to" value="{{ date_to }}">
+    <input type="hidden" name="sort" value="{{ listing.sort }}">
+    <input type="hidden" name="dir" value="{{ listing.direction }}">
+    <input type="hidden" name="select_matching" id="al-select-matching-input" value="">
+    <div class="al-bulk" role="group" aria-label="Delete audit entries">
+      <span class="al-count"><strong id="al-selected-count">0</strong> selected</span>
+      <button type="button" class="secondary" id="al-select-matching" hidden data-total="{{ listing.page.paginator.count }}">Select all {{ listing.page.paginator.count }} matching entries</button>
+      <button type="submit" class="danger" id="al-bulk-delete" disabled>Delete selected</button>
+    </div>
+  {% endif %}
   <div class="table-wrap">
     <table class="al-table">
       <thead>
-        <tr><th>Date &amp; time ({{ zone_label }})</th><th>User</th><th>Action</th><th>Description</th><th>IP address</th><th>Status</th></tr>
+        <tr>{% if can_delete %}<th class="al-check"><input type="checkbox" id="al-select-all" aria-label="Select all entries on this page"></th>{% endif %}<th>Date &amp; time ({{ zone_label }})</th><th>User</th><th>Action</th><th>Description</th><th>IP address</th><th>Status</th>{% if can_delete %}<th></th>{% endif %}</tr>
       </thead>
       <tbody>
         {% for row in listing.page %}
           <tr>
+            {% if can_delete %}<td class="al-check"><input type="checkbox" name="entry" value="{{ row.pk }}" class="al-entry" aria-label="Select this entry"></td>{% endif %}
             <td class="al-when" data-label="Date &amp; time">
               <time class="al-when-date" datetime="{{ row.created_at|date:'c' }}">{{ row.local_date }}</time>
               <span class="al-when-time">{{ row.local_time }} · {{ row.ago }} ago</span>
@@ -141,9 +168,10 @@
               {% elif row.status == "Blocked" or row.status == "Revoked" %}<span class="al-badge bad">{{ row.status }}</span>
               {% else %}<span class="al-badge recorded">Recorded</span>{% endif %}
             </td>
+            {% if can_delete %}<td><button type="submit" name="single" value="{{ row.pk }}" class="danger al-row-delete" data-single>Delete</button></td>{% endif %}
           </tr>
         {% empty %}
-          <tr><td colspan="6">
+          <tr><td colspan="{% if can_delete %}8{% else %}6{% endif %}">
             <div class="al-empty">
               {% if listing.filtered %}
                 <p class="muted">No entries match your search or filters. <a href="{{ request.path }}">Reset filters</a>.</p>
@@ -156,8 +184,82 @@
       </tbody>
     </table>
   </div>
+  {% if can_delete %}</form>{% endif %}
   <div class="al-footer">
     {% include "includes/_list_footer.html" %}
   </div>
 </div>
+
+{% if can_delete %}
+<div class="al-panel al-history">
+  <h2>Deletion history</h2>
+  <div class="table-wrap">
+    <table class="al-table">
+      <thead><tr><th>Deleted on</th><th>By</th><th>Entries</th><th>How</th></tr></thead>
+      <tbody>
+        {% for item in deletions %}
+          <tr>
+            <td data-label="Deleted on">{{ item.created_at|date:"j M Y H:i" }} UTC</td>
+            <td data-label="By">{{ item.actor_email|default:"-" }}</td>
+            <td data-label="Entries">{{ item.entry_count }}</td>
+            <td data-label="How">{{ item.method }}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4"><div class="al-empty"><p class="muted">No audit entries have been deleted.</p></div></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+(function () {
+  var form = document.getElementById("al-delete-form");
+  if (!form) return;
+  var all = document.getElementById("al-select-all");
+  var boxes = Array.prototype.slice.call(form.querySelectorAll(".al-entry"));
+  var count = document.getElementById("al-selected-count");
+  var bulk = document.getElementById("al-bulk-delete");
+  var matchingButton = document.getElementById("al-select-matching");
+  var matchingInput = document.getElementById("al-select-matching-input");
+  var total = Number(matchingButton.dataset.total);
+
+  function selected() { return boxes.filter(function (box) { return box.checked; }).length; }
+
+  function refresh() {
+    var picked = selected();
+    var matching = matchingInput.value === "1";
+    count.textContent = matching ? total : picked;
+    bulk.disabled = !(picked || matching);
+    all.checked = boxes.length > 0 && picked === boxes.length;
+    all.indeterminate = picked > 0 && picked < boxes.length;
+    // Offer every matching entry (all pages) once the whole page is ticked and there is more than this page.
+    matchingButton.hidden = matching || !(picked === boxes.length && total > boxes.length);
+  }
+
+  all.addEventListener("change", function () {
+    boxes.forEach(function (box) { box.checked = all.checked; });
+    matchingInput.value = "";
+    refresh();
+  });
+  boxes.forEach(function (box) {
+    box.addEventListener("change", function () { matchingInput.value = ""; refresh(); });
+  });
+  matchingButton.addEventListener("click", function () { matchingInput.value = "1"; refresh(); });
+
+  // The confirmation text is set when a delete button is pressed, before the form asks "Are you sure?".
+  bulk.addEventListener("click", function () {
+    var n = matchingInput.value === "1" ? total : selected();
+    form.dataset.confirm = "Delete " + (n === 1 ? "this audit entry" : n + " audit entries") +
+      " permanently? Entries cannot be restored. The deletion will be recorded.";
+  });
+  form.querySelectorAll("[data-single]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      matchingInput.value = "";
+      form.dataset.confirm = "Delete this audit entry permanently? It cannot be restored. The deletion will be recorded.";
+    });
+  });
+  refresh();
+})();
+</script>
+{% endif %}
 {% endblock %}

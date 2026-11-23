@@ -87,6 +87,8 @@ def policy_for_agent(organization):
             "days": sorted(policy.days),
             "start": policy.start_time.strftime("%H:%M"),
             "end": policy.end_time.strftime("%H:%M"),
+            # The hours are in this time zone, the same one the server uses before it accepts a screenshot.
+            "timezone": policy.timezone,
         },
         "activity": {
             "sample_interval_seconds": policy.sample_interval_seconds,

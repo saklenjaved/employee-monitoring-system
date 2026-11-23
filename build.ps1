@@ -137,6 +137,7 @@ Invoke-Native "PyInstaller" {
     & $Python -m PyInstaller --noconfirm --clean --onedir --windowed --name winagent `
         --paths src --hidden-import win32timezone `
         --collect-submodules winagent `
+        --collect-data tzdata `
         scripts\entry.py
 }
 $AgentExe = Join-Path $Root "dist\winagent\winagent.exe"

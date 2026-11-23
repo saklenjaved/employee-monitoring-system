@@ -42,7 +42,10 @@ class PolicyServiceTests(TestCase):
     def test_agent_policy_matches_the_contract(self):
         data = services.policy_for_agent(self.org_a)
         self.assertEqual(data["policy_version"], "1")
-        self.assertEqual(data["monitoring"], {"enabled": True, "days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00"})
+        self.assertEqual(
+            data["monitoring"],
+            {"enabled": True, "days": [0, 1, 2, 3, 4], "start": "09:00", "end": "18:00", "timezone": "UTC"},
+        )
         self.assertEqual(
             data["activity"],
             {"sample_interval_seconds": 30, "idle_threshold_seconds": 300, "sync_interval_seconds": 60},

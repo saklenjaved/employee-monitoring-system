@@ -2,6 +2,7 @@ from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.core.exceptions import ValidationError
 
+from .backends import accounts_matching
 from .models import MembershipStatus, Role, User
 
 
@@ -46,19 +47,30 @@ class ActivationForm(forms.Form):
 
 
 class OrganizationLoginForm(AuthenticationForm):
-    """Login form that also refuses users whose organization is deactivated."""
+    """Login form that also refuses users whose organization is deactivated.
+
+    The same email can have a separate account in each organization. If the email and password fit one
+    account, that account is used. If they fit accounts in several organizations, the form asks which
+    organization to sign in to; the organization names are shown only after the password was right.
+    """
+
+    # Hidden until the form has to ask. It is a plain text field, so the chosen value is checked in clean().
+    organization = forms.CharField(required=False, label="Organization", widget=forms.HiddenInput)
+    needs_organization = False
+    default_backend = "accounts.backends.OrganizationBackend"
 
     def clean_username(self):
         # Emails are stored in lower case, so "Admin@Org.test" must find "admin@org.test".
         return self.cleaned_data["username"].strip().lower()
 
     def get_invalid_login_error(self):
-        # Django rejects inactive accounts before confirm_login_allowed runs, so a person who has not
-        # activated yet is told so here, but only after the right password was typed. A wrong password
-        # keeps the generic message.
+        # Inactive accounts cannot sign in, so a person who has not activated yet is told so here, but only
+        # after the right password was typed. A wrong password keeps the generic message.
         username = self.cleaned_data.get("username", "")
-        user = User.objects.filter(email=username, is_active=False).first()
-        if user and user.check_password(self.cleaned_data.get("password", "")):
+        password = self.cleaned_data.get("password", "")
+        for user in User.objects.filter(email=username, is_active=False):
+            if not user.check_password(password):
+                continue
             if user.memberships.filter(status=MembershipStatus.PENDING).exists():
                 return ValidationError(
                     "Your account is not active yet. Activate it with the code from your invitation email.",
@@ -74,6 +86,44 @@ class OrganizationLoginForm(AuthenticationForm):
                 code="deactivated",
             )
         return super().get_invalid_login_error()
+
+    def clean(self):
+        username = self.cleaned_data.get("username")
+        password = self.cleaned_data.get("password")
+        if username is None or not password:
+            return self.cleaned_data
+        # Accounts with this email and password that may sign in. Each organization has its own password,
+        # so usually exactly one account fits.
+        allowed, first_error = [], None
+        for user in accounts_matching(username, password):
+            if not user.is_active:
+                continue
+            try:
+                self.confirm_login_allowed(user)
+            except ValidationError as error:
+                first_error = first_error or error
+            else:
+                allowed.append(user)
+        if len(allowed) > 1:
+            chosen = self.data.get("organization", "")
+            picked = [user for user in allowed if str(user.organization_id) == chosen]
+            if len(picked) != 1:
+                self._ask_for_organization(allowed)
+            allowed = picked
+        if not allowed:
+            raise first_error or self.get_invalid_login_error()
+        self.user_cache = allowed[0]
+        self.user_cache.backend = self.default_backend  # login() needs to know which backend signed the user in
+        return self.cleaned_data
+
+    def _ask_for_organization(self, accounts):
+        self.needs_organization = True
+        choices = [("", "Choose an organization")] + [(str(user.organization_id), user.organization.name) for user in accounts]
+        self.fields["organization"].widget = forms.Select(choices=choices)
+        raise ValidationError(
+            "This email has accounts in more than one organization. Choose the organization and enter your password again.",
+            code="choose_organization",
+        )
 
     def confirm_login_allowed(self, user):
         super().confirm_login_allowed(user)

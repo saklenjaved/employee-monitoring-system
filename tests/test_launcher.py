@@ -168,6 +168,54 @@ def test_window_disabled_is_always_closed():
     assert not off.is_open(datetime(2026, 11, 2, 12, 0))
 
 
+def test_window_uses_the_policy_time_zone_not_the_pc_clock():
+    # 08:01 to 00:00 in UTC, as an organization can set it. 20:32 UTC is inside, whatever zone the PC is in.
+    utc_window = MonitoringWindow(days=frozenset(range(7)), start=time(8, 1), end=time(0, 0), timezone="UTC")
+    moment = datetime(2026, 11, 22, 20, 32, tzinfo=timezone.utc)
+    india = moment.astimezone(timezone(timedelta(hours=5, minutes=30)))  # 02:02 the next day on a PC in India
+    assert utc_window.is_open(india)
+    assert utc_window.is_open(moment)
+    assert not utc_window.is_open(datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc))  # 08:30 in India, closed in UTC
+
+
+def test_window_day_is_the_policy_zones_day():
+    # Monday to Friday 09:00-17:00 in Kolkata. Friday 23:00 UTC is already Saturday 04:30 there: closed.
+    kolkata = MonitoringWindow(days=frozenset(range(5)), start=time(9, 0), end=time(17, 0), timezone="Asia/Kolkata")
+    assert kolkata.is_open(datetime(2026, 11, 2, 4, 0, tzinfo=timezone.utc))  # Monday 09:30 in Kolkata
+    assert not kolkata.is_open(datetime(2026, 11, 6, 23, 0, tzinfo=timezone.utc))
+
+
+def test_window_follows_daylight_saving_in_the_policy_zone():
+    london = MonitoringWindow(days=frozenset(range(7)), start=time(9, 0), end=time(17, 0), timezone="Europe/London")
+    assert london.is_open(datetime(2026, 7, 1, 8, 30, tzinfo=timezone.utc))  # 09:30 summer time
+    assert not london.is_open(datetime(2026, 1, 7, 8, 30, tzinfo=timezone.utc))  # 08:30 winter time
+
+
+def test_window_without_a_known_zone_keeps_the_device_time():
+    for zone in ("", "Not/AZone"):
+        window = MonitoringWindow(days=frozenset(range(7)), start=time(9, 0), end=time(17, 0), timezone=zone)
+        assert window.is_open(datetime(2026, 11, 2, 10, 0, tzinfo=timezone(timedelta(hours=3))))
+        assert not window.is_open(datetime(2026, 11, 2, 18, 0, tzinfo=timezone(timedelta(hours=3))))
+
+
+def test_policy_time_zone_is_read_from_the_server_policy():
+    raw = dict(POLICY_JSON, monitoring=dict(POLICY_JSON["monitoring"], timezone="Asia/Kolkata"))
+    pol = parse_policy(raw, MonitoringConfig(), ScreenshotConfig())
+    assert pol.window.timezone == "Asia/Kolkata"
+    assert pol.screenshots.window.timezone == "Asia/Kolkata"  # screenshots use the same hours
+
+
+def test_agent_collects_when_the_policy_zone_is_open_even_if_the_pc_clock_is_not(tmp_path):
+    # The bug this guards: hours in UTC, PC in another zone. The agent paused while the server allowed capture.
+    utc_policy = dict(
+        POLICY_JSON, monitoring={"enabled": True, "days": list(range(7)), "start": "08:01", "end": "00:00", "timezone": "UTC"}
+    )
+    h = Harness(tmp_path, [(200, utc_policy), (200, {"accepted": [], "duplicates": [], "rejected": []}), (200, {})])
+    assert h.agent.tick(datetime(2026, 11, 22, 20, 32, tzinfo=timezone.utc)) == "active"
+    h2 = Harness(tmp_path / "second", [(200, utc_policy), (200, {})])
+    assert h2.agent.tick(datetime(2026, 11, 22, 3, 0, tzinfo=timezone.utc)) == "paused_hours"
+
+
 def test_autostart_is_per_user_and_reversible():
     reg = FakeAutostart()
     reg.enable('"python" -m winagent run')

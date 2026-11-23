@@ -141,6 +141,9 @@ if os.environ.get("DATABASE_URL"):
             "PORT": str(_url.port or 5432),
             # Connections to a hosted database use TLS. Local development does not.
             "OPTIONS": {} if DEV_MODE else {"sslmode": "require"},
+            # Reuse each database connection for up to a minute instead of opening a new one per request.
+            "CONN_MAX_AGE": 60,
+            "CONN_HEALTH_CHECKS": True,
         }
     }
 elif os.environ.get("DB_ENGINE", "sqlite") == "postgres":
@@ -170,6 +173,10 @@ else:
     }
 
 AUTH_USER_MODEL = "accounts.User"
+# The same email can have a separate account in each organization, so sign-in uses our own backend.
+AUTHENTICATION_BACKENDS = ["accounts.backends.OrganizationBackend"]
+# Django warns that "email" is not unique. It is unique per organization (and for the Super Admin), as the backend expects.
+SILENCED_SYSTEM_CHECKS = ["auth.W004"]
 LOGIN_URL = "login"
 # After sign-in, "dashboard" sends each role to its own dashboard.
 LOGIN_REDIRECT_URL = "dashboard"
@@ -177,14 +184,19 @@ LOGOUT_REDIRECT_URL = "login"
 # One-time links (invitations and password resets) expire after 72 hours.
 PASSWORD_RESET_TIMEOUT = 60 * 60 * 72
 
-# Email (password reset and Admin invitations) is always sent over SMTP. Any SMTP server works (Gmail for
-# local development, Amazon SES or another provider later). Without EMAIL_HOST, sending fails and the
-# app shows that the email could not be sent (see accounts/checks.py for the startup warning).
-EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
+# Email (password reset, invitations and activation codes). On Render Free, which blocks SMTP, set BREVO_API_KEY:
+# mail is then sent over Brevo's HTTPS API (config/brevo_email.py) and the SMTP settings below are not used.
+# Without BREVO_API_KEY, mail goes over SMTP (Gmail for local development, or any SMTP server). With neither
+# BREVO_API_KEY nor EMAIL_HOST, sending fails and the app shows that the email could not be sent
+# (see accounts/checks.py for the startup warning).
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "")
+EMAIL_BACKEND = "config.brevo_email.BrevoEmailBackend" if BREVO_API_KEY else "django.core.mail.backends.smtp.EmailBackend"
 EMAIL_HOST = os.environ.get("EMAIL_HOST", "")
 EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
 EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+# Stop waiting on a mail server after this many seconds, so a blocked SMTP port cannot hang a web request.
+EMAIL_TIMEOUT = int(os.environ.get("EMAIL_TIMEOUT", "10"))
 EMAIL_USE_TLS = os.environ.get("EMAIL_USE_TLS", "1") == "1"
 DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "no-reply@example.invalid")
 
@@ -220,7 +232,14 @@ LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "handlers": {"console": {"class": "logging.StreamHandler"}},
-    "loggers": {"accounts": {"handlers": ["console"], "level": "INFO", "propagate": False}},
+    "loggers": {
+        "accounts": {"handlers": ["console"], "level": "INFO", "propagate": False},
+        # Only real server errors (5xx); a 403 or 404 is normal and would only fill the log.
+        "django.request": {"level": "ERROR"},
+    },
+    # Everything else (including server errors from django.request) goes to the console at WARNING and above, so
+    # Render's log shows the traceback of a 500 error. Without this, Django prints it only when DEBUG is on.
+    "root": {"handlers": ["console"], "level": "WARNING"},
 }
 
 # Agent API (docs/api-contract.yaml). Each API view lists its own authentication.
@@ -278,6 +297,12 @@ DEVICE_ONLINE_SECONDS = 15 * 60
 AGENT_BASE_URL = os.environ.get("AGENT_BASE_URL", "https://127.0.0.1:8443/api/agent/v1" if DEV_MODE else "")
 # The agent trusts the local development CA (rootCA.pem), which signs the server certificate.
 AGENT_CA_BUNDLE = os.environ.get("AGENT_CA_BUNDLE", "monitoring-platform/certs/rootCA.pem" if DEV_MODE else "")
+
+# The website's own address, used to send an employee's browser to their dashboard (never the API address above,
+# which can be a local HTTPS server the browser does not trust). Render sets RENDER_EXTERNAL_URL itself.
+SITE_URL = (
+    os.environ.get("SITE_URL") or os.environ.get("RENDER_EXTERNAL_URL") or ("http://127.0.0.1:8000" if DEV_MODE else "")
+).rstrip("/")
 
 # HTTPS everywhere outside development (TAD section 11).
 if not DEV_MODE:

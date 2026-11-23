@@ -10,13 +10,14 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import transaction
+from django.db.models import Case, CharField, OuterRef, Subquery, Value, When
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
 from audit.services import record_event
 
-from .activation import CODE_LIFETIME, EXPIRED, LOCKED, OK, WRONG, check_code, issue_code, mark_used
+from .activation import CODE_LIFETIME, EXPIRED, LOCKED, OK, WRONG, check_code, check_code_for_any, issue_code, mark_used
 from .models import ActivationCode, Membership, MembershipStatus, Role, Transfer, TransferStatus, User
 from .ratelimit import client_ip, hit, key_for, too_many
 
@@ -47,6 +48,31 @@ def get_visible_user(viewer, user_id):
     return visible_users(viewer).filter(pk=user_id).first()
 
 
+def platform_admins(viewer):
+    """Every Admin account of every organization, for the Super Admin. Other roles get nothing.
+
+    `admin_status` is "pending" (invited, not activated yet), "inactive" (deactivated, or the Admin's
+    membership ended) or "active". It comes from the Admin's latest Admin membership.
+    """
+    if viewer.role != Role.SUPER_ADMIN:
+        return User.objects.none()
+    latest = Membership.objects.filter(user=OuterRef("pk"), role=Role.ADMIN).order_by("-created_at", "-pk")
+    return (
+        User.objects.filter(role=Role.ADMIN)
+        .select_related("organization")
+        .annotate(membership_status=Subquery(latest.values("status")[:1]))
+        .annotate(
+            admin_status=Case(
+                When(membership_status=MembershipStatus.PENDING, then=Value("pending")),
+                When(is_active=False, then=Value("inactive")),
+                When(membership_status=MembershipStatus.ENDED, then=Value("inactive")),
+                default=Value("active"),
+                output_field=CharField(),
+            )
+        )
+    )
+
+
 REFUSED_MESSAGE = "This email cannot be invited to this organization. Ask the Super Admin for help."
 OPEN_STATUSES = (MembershipStatus.PENDING, MembershipStatus.ACTIVE)
 
@@ -54,8 +80,10 @@ OPEN_STATUSES = (MembershipStatus.PENDING, MembershipStatus.ACTIVE)
 def open_invitation(actor, organization, email, full_name, role):
     """Create the pending invitation and its first activation code, without sending anything.
 
-    A new email gets a new account that cannot sign in until activation. An email that already
-    has an account gets only a new pending membership, and its password is not changed.
+    Each organization has its own account for an email. An email with no account in this organization gets
+    a new account that cannot sign in until activation, even when the same email has an account in another
+    organization (that account, its password and its data are not touched). An email whose account in this
+    organization ended earlier gets only a new pending membership, and its password is not changed.
     Returns (user, membership, code). Raises ValueError when the invitation is refused.
     The caller emails the code with send_activation_code once its own transaction has committed.
     """
@@ -64,19 +92,15 @@ def open_invitation(actor, organization, email, full_name, role):
     if role == Role.SUPER_ADMIN:
         raise ValueError(REFUSED_MESSAGE)
     with transaction.atomic():
-        user = User.objects.select_for_update().filter(email=email).first()
+        # The Super Admin's email is global and can never be used for an organization account.
+        if User.objects.filter(email=email, role=Role.SUPER_ADMIN).exists():
+            raise ValueError(REFUSED_MESSAGE)
+        user = User.objects.select_for_update().filter(email=email, organization=organization).first()
         if user is None:
             user = User(email=email, full_name=full_name)
             user.set_unusable_password()
-        elif user.role == Role.SUPER_ADMIN:
-            raise ValueError(REFUSED_MESSAGE)
-        else:
-            open_memberships = user.memberships.filter(status__in=OPEN_STATUSES)
-            # Another organization's membership stays private: the message is the same as for a bad email.
-            if open_memberships.exclude(organization=organization).exists():
-                raise ValueError(REFUSED_MESSAGE)
-            if open_memberships.exists():
-                raise ValueError("This person already has an open invitation or membership in your organization.")
+        elif user.memberships.filter(status__in=OPEN_STATUSES).exists():
+            raise ValueError("This person already has an open invitation or membership in your organization.")
         user.organization = organization
         user.role = role
         user.is_active = False  # the account opens only when the invitation is activated
@@ -194,8 +218,10 @@ def send_activation_code(request, membership, code):
     try:
         send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [user.email])
     except Exception as error:  # Mail problems must not undo the invitation; the Admin can resend.
-        # Log the membership ID and error type only. The address and the code are never logged.
-        logger.warning("activation email failed for membership %s (%s)", membership.pk, type(error).__name__)
+        # Log the membership ID, error type and HTTP status (if any) only. The address and the code are never logged.
+        logger.warning(
+            "activation email failed for membership %s (%s %s)", membership.pk, type(error).__name__, getattr(error, "code", "")
+        )
         return False
     return True
 
@@ -287,14 +313,18 @@ def activate_membership(request, email, code, password=""):
     if too_many_code_attempts(request, "activate", email):
         return None, LIMITED_MESSAGE
 
-    user = User.objects.filter(email=email).first()
-    membership = pending_membership(user) if user else None
-    if membership is None:
-        if user and ActivationCode.objects.filter(membership__user=user, used_at__isnull=False).exists():
+    # The same email may have a pending invitation in several organizations. The code says which one it is.
+    pending = list(
+        Membership.objects.filter(user__email=email, status=MembershipStatus.PENDING)
+        .select_related("user", "organization")
+        .order_by("created_at", "pk")
+    )
+    if not pending:
+        if ActivationCode.objects.filter(membership__user__email=email, used_at__isnull=False).exists():
             return None, USED_MESSAGE
         return None, INVALID_MESSAGE
 
-    result, tries_left = check_code(membership, code)
+    membership, result, tries_left = check_code_for_any(pending, code)
     if result == WRONG:
         return None, f"The code is not correct. Tries left before it locks: {tries_left}."
     if result == LOCKED:
@@ -304,6 +334,7 @@ def activate_membership(request, email, code, password=""):
     if result != OK:
         return None, INVALID_MESSAGE
 
+    user = membership.user  # the account of the organization this code belongs to
     new_identity = not user.has_usable_password()
     if new_identity:
         if not password:

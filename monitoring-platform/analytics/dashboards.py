@@ -106,11 +106,11 @@ def my_dashboard(request):
         sync = sync_status(user)
         waiting = list(waiting_pcs_for(user))
         setup_open = open_window_for(user) is not None
-        # A PC is being connected: setup is open and no PC is connected yet, or the PC was just approved and
-        # its agent has not checked in yet. The card then refreshes every few seconds, so the Approve
-        # button and the Connected status appear by themselves.
+        # A PC is being connected: the installer was downloaded (setup is open) or a PC is waiting, and no PC is
+        # connected yet, or the PC was just approved and its agent has not checked in yet. The card then
+        # refreshes every few seconds, so the Approve button and the Connected status appear by themselves.
         approved_pc = awaiting_first_contact(user)
-        connecting = (connection == "not_connected" and bool(waiting)) or approved_pc is not None
+        connecting = (connection == "not_connected" and (bool(waiting) or setup_open)) or approved_pc is not None
         return {
             "employee": user,
             "report": usage_for(user, user, start, end),

@@ -9,6 +9,7 @@ description = "Windows Desktop Monitoring Agent (POC) for the Employee Monitorin
 requires-python = ">=3.11"
 dependencies = [
     "requests>=2.32,<3",
+    "tzdata>=2024.1",  # monitoring hours in the organization's time zone
     "psutil>=6.0,<8",
     "Pillow>=10.4,<12",
     "mss>=9.0,<10",

@@ -82,6 +82,22 @@ def test_approval_after_waiting_stores_the_credential(tmp_path: Path):
     assert opened == ["https://h.invalid/dashboard/me/"]  # the dashboard is opened once
 
 
+def test_the_dashboard_address_from_the_server_is_opened_instead_of_the_api_address(tmp_path: Path):
+    store = CredentialStore(tmp_path / "cred.bin", FakeProtector())
+    request = {**pending_request(), "dashboard_url": "http://site.example.invalid/dashboard/me/"}
+    result, opened = run(FakeApi([request], [approved()]), store)
+    assert result is True
+    assert opened == ["http://site.example.invalid/dashboard/me/"]
+
+
+def test_an_address_that_is_not_http_is_ignored(tmp_path: Path):
+    store = CredentialStore(tmp_path / "cred.bin", FakeProtector())
+    request = {**pending_request(), "dashboard_url": "file:///C:/Windows/system32/calc.exe"}
+    result, opened = run(FakeApi([request], [approved()]), store)
+    assert result is True
+    assert opened == ["https://h.invalid/dashboard/me/"]  # the derived address is used instead
+
+
 def test_an_expired_request_is_replaced_by_a_new_one(tmp_path: Path):
     store = CredentialStore(tmp_path / "cred.bin", FakeProtector())
     api = FakeApi(

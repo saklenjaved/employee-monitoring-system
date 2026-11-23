@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Mapping
+from urllib.parse import urlparse
 
 from winagent.api_client import AgentApi
 from winagent.credentials import CredentialStore, DeviceCredential
@@ -30,6 +31,18 @@ def dashboard_url(api_base_url: str) -> str:
     """The employee's dashboard, found from the API address (the same server)."""
     root = api_base_url.split("/api/agent/v1")[0].rstrip("/")
     return f"{root}/dashboard/me/"
+
+
+def dashboard_to_open(request: Mapping[str, Any], fallback: str) -> str:
+    """The page to open for the employee: the website address the server sent, or the derived one.
+
+    The server sends its own website address, which can differ from the API address (for example a
+    local API with a private certificate). Only an http or https address is used.
+    """
+    sent = request.get("dashboard_url")
+    if isinstance(sent, str) and urlparse(sent).scheme in ("http", "https") and urlparse(sent).netloc:
+        return sent
+    return fallback
 
 
 def open_dashboard_once(url: str, marker: Path, open_browser: Callable[[str], Any]) -> None:
@@ -82,7 +95,7 @@ def pair_this_pc(
         # Open the dashboard once, right after the first request exists, so the employee sees the approval prompt.
         # A later request (the first one expired) does not open another window.
         if not opened:
-            open_browser(dashboard)
+            open_browser(dashboard_to_open(request, dashboard))
             opened = True
         if _await_approval(api, store, request, stop_requested, wait):
             return True

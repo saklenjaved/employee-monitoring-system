@@ -18,7 +18,7 @@ from django.utils import timezone
 
 from audit.services import record_event
 
-from .activation import CODE_LIFETIME, EXPIRED, LOCKED, OK, WRONG, check_code, issue_code, mark_used
+from .activation import CODE_LIFETIME, EXPIRED, LOCKED, OK, WRONG, check_code_for_any, issue_code, mark_used
 from .models import ActivationCode, EndReason, Membership, MembershipStatus, Role, Transfer, TransferStatus, User
 from .ratelimit import hit, key_for, too_many
 from .services import ASSIGNABLE_ROLES, LIMITED_MESSAGE, logger, too_many_code_attempts
@@ -27,6 +27,9 @@ START_LIMIT = 3  # transfer emails per person per hour
 START_WINDOW_SECONDS = 60 * 60
 
 NO_PERSON_MESSAGE = "No active Employee or Manager has this email."
+SEVERAL_ACCOUNTS_MESSAGE = (
+    "This email has active accounts in more than one organization, so a transfer cannot tell which one to move."
+)
 INVALID_MESSAGE = "The code is not valid. Check the email address and code, or ask the Super Admin for a new code."
 EXPIRED_MESSAGE = "This code has expired. Ask the Super Admin to send a new code."
 LOCKED_MESSAGE = "This code is locked after too many wrong tries. Ask the Super Admin to send a new code."
@@ -41,16 +44,24 @@ def start_transfer(actor, email, destination):
     """
     if actor.role != Role.SUPER_ADMIN:
         raise ValueError("Only the Super Admin can transfer people.")
-    user = User.objects.filter(email=email.strip().lower()).first()
-    source = (
-        user.memberships.filter(status=MembershipStatus.ACTIVE).select_related("organization").first() if user else None
+    email = email.strip().lower()
+    # Each organization has its own account for an email. A transfer moves one account, so it must be clear which.
+    sources = list(
+        Membership.objects.filter(user__email=email, status=MembershipStatus.ACTIVE, role__in=ASSIGNABLE_ROLES)
+        .select_related("organization", "user")
     )
-    if source is None or source.role not in ASSIGNABLE_ROLES:
+    if not sources:
         raise ValueError(NO_PERSON_MESSAGE)
+    if len(sources) > 1:
+        raise ValueError(SEVERAL_ACCOUNTS_MESSAGE)
+    source = sources[0]
+    user = source.user
     if not destination.is_active:
         raise ValueError("The destination organization is deactivated.")
     if destination.pk == source.organization_id:
         raise ValueError("The person already belongs to that organization.")
+    if User.objects.filter(email=email, organization=destination).exists():
+        raise ValueError("This email already has an account in the destination organization.")
     key = key_for("transfer-start", str(user.pk))
     if too_many(key, START_LIMIT):
         raise ValueError("Too many transfer codes were sent for this person. Try again later.")
@@ -113,22 +124,22 @@ def check_transfer_code(request, email, code):
     email = email.strip().lower()
     if too_many_code_attempts(request, "transfer", email):
         return None, LIMITED_MESSAGE
-    user = User.objects.filter(email=email).first()
-    transfer = (
-        Transfer.objects.filter(user=user, status=TransferStatus.AWAITING_CODE)
+    # Only one account per email can be waiting (start_transfer refuses an email with several active accounts),
+    # but the lookup is by email across organizations, so it is done the same way as activation.
+    transfers = list(
+        Transfer.objects.filter(user__email=email, status=TransferStatus.AWAITING_CODE)
         .select_related("source_membership__organization", "destination_organization", "user")
-        .first()
-        if user
-        else None
+        .order_by("created_at", "pk")
     )
-    if transfer is None:
-        if user and Transfer.objects.filter(user=user, status=TransferStatus.COMPLETED).exists():
+    if not transfers:
+        if Transfer.objects.filter(user__email=email, status=TransferStatus.COMPLETED).exists():
             return None, DONE_MESSAGE
         return None, INVALID_MESSAGE
-    source = transfer.source_membership
-    if source.status != MembershipStatus.ACTIVE or not transfer.destination_organization.is_active:
+    by_source = {transfer.source_membership_id: transfer for transfer in transfers}
+    source, result, tries_left = check_code_for_any([transfer.source_membership for transfer in transfers], code)
+    transfer = by_source[source.pk] if source is not None else None
+    if transfer is not None and (source.status != MembershipStatus.ACTIVE or not transfer.destination_organization.is_active):
         return None, INVALID_MESSAGE
-    result, tries_left = check_code(source, code)
     if result == WRONG:
         return None, f"The code is not correct. Tries left before it locks: {tries_left}."
     if result == LOCKED:

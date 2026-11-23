@@ -1,4 +1,5 @@
 """Agent API: registration, policy, events, screenshots and heartbeat (docs/api-contract.yaml)."""
+from django.conf import settings
 from rest_framework import exceptions, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
@@ -202,14 +203,15 @@ class PairingRequestView(APIView):
             # The same message for a wrong or retired token, so the reply does not reveal which one it was.
             raise exceptions.ValidationError({"org_token": "invalid"})
         pairing, token = create_pairing_request(details, organization)
-        response = Response(
-            {
-                "request_id": str(pairing.id),
-                "poll_token": token,
-                "expires_at": pairing.expires_at.strftime(UTC_FORMAT),
-            },
-            status=status.HTTP_201_CREATED,
-        )
+        body = {
+            "request_id": str(pairing.id),
+            "poll_token": token,
+            "expires_at": pairing.expires_at.strftime(UTC_FORMAT),
+        }
+        if settings.SITE_URL:
+            # Where the agent opens the browser: the website itself, not the API address.
+            body["dashboard_url"] = f"{settings.SITE_URL}/dashboard/me/"
+        response = Response(body, status=status.HTTP_201_CREATED)
         response["Cache-Control"] = "no-store"
         return response
 

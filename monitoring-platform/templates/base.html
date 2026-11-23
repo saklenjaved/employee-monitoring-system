@@ -572,6 +572,7 @@
           <summary><span>Platform</span></summary>
           <ul class="nav-links">
             <li><a href="{% url 'organization_list' %}"{% if current == 'organization_list' or current == 'organization_create' or current == 'organization_admin_create' %} aria-current="page"{% endif %} title="Organizations"><svg class="i" aria-hidden="true"><use href="#i-shield"/></svg><span class="nav-label">Organizations</span></a></li>
+            <li><a href="{% url 'admin_list' %}"{% if current == 'admin_list' %} aria-current="page"{% endif %} title="Admins"><svg class="i" aria-hidden="true"><use href="#i-users"/></svg><span class="nav-label">Admins</span></a></li>
             <li><a href="{% url 'audit_log_list' %}"{% if current == 'audit_log_list' %} aria-current="page"{% endif %} title="Audit logs"><svg class="i" aria-hidden="true"><use href="#i-list"/></svg><span class="nav-label">Audit logs</span></a></li>
           </ul>
         </details>

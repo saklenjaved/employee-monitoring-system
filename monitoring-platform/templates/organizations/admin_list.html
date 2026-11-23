@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Admins{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Admins</h1>
+  <p class="muted">Every Admin account across all organizations. Find an Admin by name, email or organization.</p>
+  <p><a class="button" href="{% url 'organization_list' %}">Manage organizations</a></p>
+  {% include "includes/_list_bar.html" %}
+  <table>
+    {% include "includes/_list_head.html" %}
+    {% for admin in listing.page %}
+      <tr>
+        <td>{{ admin.full_name }}</td>
+        <td>{{ admin.email }}</td>
+        <td>
+          {% if admin.organization %}
+            <a href="{% url 'organization_admin_create' admin.organization.pk %}">{{ admin.organization.name }}</a>
+            {% if not admin.organization.is_active %}<span class="badge badge-muted">Deactivated</span>{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td>
+          {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
+          {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
+          {% else %}<span class="status bad">Inactive</span>{% endif %}
+        </td>
+        <td>{{ admin.date_joined|date:"j M Y" }}</td>
+        <td>
+          {% if admin.admin_status == "pending" %}
+            <form method="post" action="{% url 'organization_admin_resend_invite' admin.pk %}" class="inline-form">
+              {% csrf_token %}
+              <button type="submit" class="secondary">Resend invitation</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% empty %}
+      <tr><td colspan="6" class="muted">{% if listing.filtered %}No Admins match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.{% else %}No Admin accounts yet. Create an organization, then add its first Admin.{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  {% include "includes/_list_footer.html" %}
+</div>
+{% endblock %}

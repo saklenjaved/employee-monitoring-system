@@ -79,6 +79,34 @@ def check_code(membership, code):
     return (LOCKED if tries_left <= 0 else WRONG), max(tries_left, 0)
 
 
+def code_matches(membership, code):
+    """True when `code` is the membership's latest code. It does not use up a try and ignores expiry.
+
+    Used to find which of several invitations (the same email in several organizations) a code belongs to.
+    check_code then decides whether that code is still valid.
+    """
+    current = latest_code(membership)
+    return current is not None and hmac.compare_digest(current.code_hash, _keyed_hash(membership.pk, code))
+
+
+def check_code_for_any(memberships, code):
+    """Check a code against several pending memberships of the same email. Returns (membership, result, tries_left).
+
+    The membership whose code matches is checked normally. When no code matches, the wrong try counts against
+    every one of them, so having invitations in several organizations never gives extra guesses.
+    """
+    for membership in memberships:
+        if code_matches(membership, code):
+            result, tries_left = check_code(membership, code)
+            return membership, result, tries_left
+    results = [check_code(membership, code) for membership in memberships]
+    for wanted in (WRONG, EXPIRED, LOCKED):
+        found = [tries for result, tries in results if result == wanted]
+        if found:
+            return None, wanted, min(found)
+    return None, MISSING, 0
+
+
 def mark_used(membership):
     """Use up the current code. Returns False if it was already used (a concurrent request won)."""
     updated = ActivationCode.objects.filter(membership=membership, used_at__isnull=True).update(used_at=timezone.now())

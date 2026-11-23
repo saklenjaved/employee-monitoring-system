@@ -3,7 +3,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.cache import cache
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework.test import APIClient
@@ -252,6 +252,14 @@ class PollApiTests(TestCase):
         response = self.api.post(PAIRING_URL, {**PC, "org_token": self.enrollment_token}, format="json")
         self.assertEqual(response.status_code, 201, response.content)
         return response.json()
+
+    @override_settings(SITE_URL="https://monitor.example.test")
+    def test_the_reply_names_the_website_dashboard_not_the_api_address(self):
+        self.assertEqual(self.create()["dashboard_url"], "https://monitor.example.test/dashboard/me/")
+
+    @override_settings(SITE_URL="")
+    def test_without_a_site_address_the_reply_has_no_dashboard_url(self):
+        self.assertNotIn("dashboard_url", self.create())
 
     def test_a_wrong_enrollment_token_is_refused(self):
         response = self.api.post(PAIRING_URL, {**PC, "org_token": "not-a-real-token"}, format="json")
