@@ -4,7 +4,7 @@
 <div class="card">
   <h1>Activate your account</h1>
   <p class="muted">Enter your email address and the 8-digit activation code from your invitation email. The code works once and expires after 24 hours.</p>
-  <form method="post" id="activate-form">
+  <form method="post" id="activate-form" data-password-toggle>
     {% csrf_token %}
     {% include "includes/_form_fields.html" %}
     <div class="actions">

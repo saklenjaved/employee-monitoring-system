@@ -308,8 +308,41 @@
     paintThemeToggles();
   });
 
+  // Eye icons drawn inline, because the shared icon sprite is only on signed-in pages.
+  var EYE_ICON = '<svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>';
+  var EYE_OFF_ICON = '<svg class="i" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 6.1A9.8 9.8 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1"/><path d="M6.6 6.6C3.7 8.4 2 12 2 12s3.5 7 10 7a9.7 9.7 0 0 0 4.4-1"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>';
+
+  // Forms marked data-password-toggle get a small eye button on each password field. It shows or hides the typed password.
+  function setUpPasswordToggles(root) {
+    root.querySelectorAll("form[data-password-toggle] input[type=password]").forEach(function (input) {
+      if (input.dataset.toggleReady) return;
+      input.dataset.toggleReady = "1";
+      var wrap = document.createElement("div");
+      wrap.className = "pw-wrap";
+      input.parentNode.insertBefore(wrap, input);
+      wrap.appendChild(input);
+      var button = document.createElement("button");
+      button.type = "button";
+      button.className = "pw-toggle";
+      wrap.appendChild(button);
+      var show = function (visible) {
+        var label = visible ? "Hide password" : "Show password";
+        input.type = visible ? "text" : "password";
+        button.setAttribute("aria-pressed", visible ? "true" : "false");
+        button.setAttribute("aria-label", label);
+        button.title = label;
+        button.innerHTML = visible ? EYE_OFF_ICON : EYE_ICON;
+      };
+      button.addEventListener("click", function () { show(input.type === "password"); input.focus(); });
+      // Send the form with the field hidden again, so password managers still see a password field.
+      if (input.form) input.form.addEventListener("submit", function () { show(false); });
+      show(false);
+    });
+  }
+
   function setUp(root) {
     setUpToasts(root);
+    setUpPasswordToggles(root);
     setUpConfirm(root);
     root.querySelectorAll("[data-range-form]").forEach(setUpRange);
     root.querySelectorAll("[data-trend-url]").forEach(drawTrend);

@@ -4,7 +4,7 @@
 <div class="card">
   <h1>Log in</h1>
   <p class="muted">Sign in with the work email your administrator gave you.</p>
-  <form method="post" id="login-form">
+  <form method="post" id="login-form" data-password-toggle>
     {% csrf_token %}
     {% include "includes/_form_fields.html" %}
     <input type="hidden" name="next" value="{{ next }}">
