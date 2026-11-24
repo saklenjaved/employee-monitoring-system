@@ -217,11 +217,10 @@ def send_activation_code(request, membership, code):
     body = render_to_string("accounts/activation_email.txt", context)
     try:
         send_mail(subject, body, settings.DEFAULT_FROM_EMAIL, [user.email])
-    except Exception as error:  # Mail problems must not undo the invitation; the Admin can resend.
-        # Log the membership ID, error type and HTTP status (if any) only. The address and the code are never logged.
-        logger.warning(
-            "activation email failed for membership %s (%s %s)", membership.pk, type(error).__name__, getattr(error, "code", "")
-        )
+    except Exception:  # Mail problems must not undo the invitation; the Admin can resend.
+        # The traceback shows the exact error. Brevo's status and safe error text are logged by config/brevo_email.py.
+        # The address, the code and the API key are never put into this message.
+        logger.exception("activation email failed for membership %s", membership.pk)
         return False
     return True
 
