@@ -18,20 +18,26 @@ class ProfileForm(forms.ModelForm):
 class ActivationForm(forms.Form):
     """What an invited person types on the activation page. The password is only for a new account."""
 
-    email = forms.EmailField(label="Email")
+    # autocomplete keeps the browser's saved sign-in from overwriting the invited email and filling the password.
+    email = forms.EmailField(label="Email", widget=forms.EmailInput(attrs={"autocomplete": "off"}))
     code = forms.CharField(
         label="Activation code",
         min_length=8,
         max_length=8,
         help_text="The 8 digits from your invitation email.",
+        widget=forms.TextInput(attrs={"autocomplete": "one-time-code"}),
     )
     password = forms.CharField(
         label="Choose a password",
         required=False,
-        widget=forms.PasswordInput,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
         help_text="Only if you are new to Employee Monitoring. Leave blank if you already have a password.",
     )
-    password_confirm = forms.CharField(label="Confirm password", required=False, widget=forms.PasswordInput)
+    password_confirm = forms.CharField(
+        label="Confirm password",
+        required=False,
+        widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
+    )
 
     def clean_code(self):
         code = self.cleaned_data["code"].strip()

@@ -18,6 +18,7 @@ from .models import Organization
 from .services import (
     create_organization,
     delete_organization_admin,
+    organization_figures,
     set_organization_active,
     set_organization_admin_active,
     update_organization_admin,
@@ -66,10 +67,26 @@ def organization_list(request):
 
 @role_required(Role.SUPER_ADMIN)
 def organization_detail(request, pk):
-    """One organization and its Admin accounts."""
+    """One organization, its live figures and its Admin accounts."""
     organization = get_object_or_404(Organization, pk=pk)
     admins = platform_admins(request.user).filter(organization=organization).order_by("full_name", "pk")
-    return render(request, "organizations/detail.html", {"organization": organization, "admins": admins})
+    context = {
+        "organization": organization,
+        "admins": admins,
+        "figures": organization_figures(request.user, organization),
+    }
+    return render(request, "organizations/detail.html", context)
+
+
+@role_required(Role.SUPER_ADMIN)
+def organization_figures_panel(request, pk):
+    """The live figures on the detail page. The page asks for this again every 30 seconds (htmx)."""
+    organization = get_object_or_404(Organization, pk=pk)
+    return render(
+        request,
+        "organizations/_figures.html",
+        {"organization": organization, "figures": organization_figures(request.user, organization)},
+    )
 
 
 @role_required(Role.SUPER_ADMIN)
@@ -90,6 +107,10 @@ def organization_set_active(request, pk):
     set_organization_active(request.user, organization, active)
     state = "activated" if active else "deactivated"
     messages.success(request, f"Organization '{organization.name}' {state}.")
+    # The detail page stays on screen: it shows the new status straight away. Only a fixed value is accepted,
+    # so this can never send the user to another address.
+    if request.POST.get("next") == "detail":
+        return redirect("organization_detail", pk=organization.pk)
     return redirect("organization_list")
 
 

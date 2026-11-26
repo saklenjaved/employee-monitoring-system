@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Edit Admin{% endblock %}
-{% block crumbs %}<a href="{% url 'admin_list' %}">Admins</a><span class="sep">/</span>Edit Admin{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span><a href="{% url 'admin_list' %}">Admins</a><span class="sep">/</span>Edit Admin{% endblock %}
 {% block content %}
 <div class="card">
   <h1>Edit Admin</h1>

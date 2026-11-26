@@ -41,11 +41,13 @@
   }
 
   function fillTable(table, data) {
-    var head = "<tr><th>Date</th>" + CATEGORIES.map(function (c) { return "<th>" + c[1] + "</th>"; }).join("") + "<th>Activity</th></tr>";
+    // Same columns as the chart: the categories, then the idle line, then the activity share.
+    var head = "<tr><th>Date</th>" + CATEGORIES.map(function (c) { return "<th>" + c[1] + "</th>"; }).join("") + "<th>Idle</th><th>Activity</th></tr>";
     var rows = data.labels.map(function (label, i) {
       var cells = CATEGORIES.map(function (c) { return "<td>" + hours(data.series[c[0]][i]) + "</td>"; }).join("");
+      var idle = data.idle_hours ? hours(data.idle_hours[i]) : "-";
       var activity = data.activity_percent[i] === null ? "-" : data.activity_percent[i] + "%";
-      return "<tr><td>" + shortDate(label) + "</td>" + cells + "<td>" + activity + "</td></tr>";
+      return "<tr><td>" + shortDate(label) + "</td>" + cells + "<td>" + idle + "</td><td>" + activity + "</td></tr>";
     });
     table.innerHTML = head + rows.join("");
   }

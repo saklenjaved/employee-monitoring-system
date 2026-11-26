@@ -1,0 +1,40 @@
+{# Live figures for one organization. Asks for itself again every 30 seconds, so the numbers stay current. #}
+<section class="org-figures" id="org-figures" aria-label="Live figures" hx-get="{% url 'organization_figures' organization.pk %}" hx-trigger="every 30s" hx-swap="outerHTML">
+  <style>
+    .org-figures { margin-top: 16px; }
+    .org-figures-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; }
+    .org-fig { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 14px 16px; position: relative; overflow: hidden; }
+    .org-fig::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--brand-grad); }
+    .org-fig-value { display: block; font-size: 1.5em; font-weight: 800; letter-spacing: -.02em; line-height: 1.1; }
+    .org-fig-label { display: block; color: var(--c-muted); font-size: .85em; margin-top: 4px; }
+    .org-fig-split { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; font-size: .8em; }
+    .org-fig-split span { padding: 2px 8px; border-radius: 999px; background: var(--c-surface-2); color: var(--c-muted); }
+    .org-fig-foot { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--c-muted); font-size: .8em; }
+    .org-fig-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-success); animation: org-pulse 2s ease-in-out infinite; }
+    @keyframes org-pulse { 0%, 100% { opacity: 1; } 50% { opacity: .3; } }
+    @media (max-width: 600px) { .org-figures-grid { grid-template-columns: 1fr 1fr; } }
+  </style>
+  <div class="org-figures-grid">
+    <div class="org-fig">
+      <span class="org-fig-value">{{ figures.admin_total }}</span>
+      <span class="org-fig-label">Total Admins</span>
+      <div class="org-fig-split">
+        <span>{{ figures.admin_active }} active</span>
+        <span>{{ figures.admin_pending }} pending</span>
+        <span>{{ figures.admin_inactive }} inactive</span>
+      </div>
+    </div>
+    <div class="org-fig">
+      <span class="org-fig-value">{{ figures.employee_count }}</span>
+      <span class="org-fig-label">Employees</span>
+    </div>
+    <div class="org-fig">
+      <span class="org-fig-value">{{ figures.online_count }} / {{ figures.device_count }}</span>
+      <span class="org-fig-label">Agents online / connected PCs</span>
+    </div>
+  </div>
+  <div class="org-fig-foot">
+    <span class="org-fig-dot" aria-hidden="true"></span>
+    Live · updated {{ figures.updated_label }}
+  </div>
+</section>

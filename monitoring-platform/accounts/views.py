@@ -1,7 +1,7 @@
 import logging
 
 from django.contrib import messages
-from django.contrib.auth import update_session_auth_hash
+from django.contrib.auth import login, update_session_auth_hash
 from django.contrib.auth import views as auth_views
 from django.contrib.auth.forms import PasswordChangeForm
 from django.core.cache import cache
@@ -14,6 +14,7 @@ from . import services
 from .forms import ActivationForm, OrganizationLoginForm, ProfileForm
 from .ratelimit import client_ip, hit, key_for, too_many
 
+SIGN_IN_BACKEND = "accounts.backends.OrganizationBackend"
 LOGIN_FAILURES_PER_EMAIL = 10
 LOGIN_FAILURES_PER_IP = 30
 LOGIN_WINDOW_SECONDS = 15 * 60
@@ -30,16 +31,24 @@ def _too_many_attempts(request):
 
 def activate(request):
     """Activation page for invited people. Anyone may open it; the code sent by email is the proof."""
-    form = ActivationForm(request.POST or None)
+    # The link from the invitation email carries a signed ID; it pre-fills the email field. The field stays editable.
+    invited = services.invited_email(request.GET.get("invite"))
+    form = ActivationForm(request.POST or None, initial={"email": invited})
     if request.method == "POST" and form.is_valid():
         data = form.cleaned_data
-        _, error = services.activate_membership(request, data["email"], data["code"], data["password"])
+        user, error = services.activate_membership(request, data["email"], data["code"], data["password"])
         if error:
             form.add_error(None, error)
+        elif data["password"] and user.check_password(data["password"]):
+            # The password is the one the person just set, or their own existing one. Only then is the
+            # account signed in, and the dashboard for its role (Admin or Employee) is shown.
+            login(request, user, backend=SIGN_IN_BACKEND)
+            messages.success(request, "Your account is active.")
+            return redirect("dashboard")
         else:
             messages.success(request, "Your account is active. Sign in with your email and password.")
             return redirect("login")
-    return render(request, "accounts/activate.html", {"form": form})
+    return render(request, "accounts/activate.html", {"form": form, "public_page": True})
 
 
 @role_required()

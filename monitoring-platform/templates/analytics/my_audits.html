@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Audits{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Audits</h1>
+    <p class="muted">Records about your own account and screenshots. Times are in {{ zone_label }}.</p>
+  </div>
+</div>
+
+<div class="card">
+  {% include "analytics/_filters.html" %}
+</div>
+
+<div class="card">
+  <div class="section-title"><h2>Audit entries</h2></div>
+  <p class="muted">Shows your own actions, changes to your account, and actions on your screenshots. Other people are shown as Administrator.</p>
+  <div class="table-wrap">
+    <table class="chart-table">
+      <tr><th>When</th><th>Action</th><th>Who</th><th>Detail</th></tr>
+      {% for row in audits %}
+        <tr><td>{{ row.time|date:"j M Y, H:i" }}</td><td>{{ row.action }}</td><td>{{ row.who }}</td><td>{{ row.detail|default:"—" }}</td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">No audit entries in these dates.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

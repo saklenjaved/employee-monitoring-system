@@ -1,17 +1,39 @@
 {% extends "base.html" %}
 {% block title %}Activate your account{% endblock %}
 {% block content %}
-<div class="card">
+<style>
+  /* Activation page only. Larger card, fields and button; the same colors and fonts as the rest of the app. */
+  .auth-page .content { max-width: 540px; }
+  .activate-card { padding: 36px 36px 30px; }
+  .activate-card h1 { font-size: 1.7rem; margin-bottom: 8px; }
+  .activate-card .intro { font-size: 1rem; line-height: 1.6; margin-bottom: 24px; }
+  .activate-form .field { margin-bottom: 18px; }
+  .activate-form label { display: block; font-size: .95rem; font-weight: 600; color: var(--c-text); margin-bottom: 8px; }
+  .activate-form input[type=email],
+  .activate-form input[type=text],
+  .activate-form input[type=password] { width: 100%; height: 48px; padding: 0 14px; font-size: 1rem; border-radius: 10px; }
+  /* The code field matches the other inputs: same font, height and alignment. Only the digits are spaced a little. */
+  .activate-form #id_code { font-size: 1rem; letter-spacing: .08em; }
+  .activate-form .help { margin-top: 6px; font-size: .85rem; }
+  .activate-form .actions { margin-top: 26px; }
+  .activate-form .actions button { width: 100%; height: 50px; font-size: 1rem; }
+  .activate-footer { margin-top: 22px; text-align: center; font-size: .95rem; }
+  @media (max-width: 480px) {
+    .activate-card { padding: 26px 20px 24px; }
+    .activate-card h1 { font-size: 1.45rem; }
+  }
+</style>
+<div class="card activate-card">
   <h1>Activate your account</h1>
-  <p class="muted">Enter your email address and the 8-digit activation code from your invitation email. The code works once and expires after 24 hours.</p>
-  <form method="post" id="activate-form" data-password-toggle>
+  <p class="muted intro">Enter your email address and the 8-digit activation code from your invitation email. The code works once and expires after 24 hours.</p>
+  <form method="post" id="activate-form" class="activate-form" data-password-toggle>
     {% csrf_token %}
     {% include "includes/_form_fields.html" %}
     <div class="actions">
       <button type="submit" id="activate-submit">Activate account</button>
     </div>
   </form>
-  <p class="help">Already active? <a href="{% url 'login' %}">Sign in</a></p>
+  <p class="activate-footer">Already active? <a href="{% url 'login' %}">Sign in</a></p>
 </div>
 <script>
   // Stop a double submit and show that the activation is in progress.

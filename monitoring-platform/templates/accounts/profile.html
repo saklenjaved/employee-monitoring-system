@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}My profile{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>My profile{% endblock %}
 {% block content %}
 <div class="card">
   <h1>My profile</h1>

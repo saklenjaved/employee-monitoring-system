@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Classification rules{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Classification rules{% endblock %}
 {% block content %}
 <style>
   /* Classification rules page. Page tokens come from base.html. Only classes that start with rl- are used here. */

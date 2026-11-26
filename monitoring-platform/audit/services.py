@@ -1,11 +1,22 @@
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
+from django.db.models import Q
 
 from accounts.models import Role
 
 from .models import AuditDeletion, AuditLog
 
 DELETE_BATCH_SIZE = 1000  # rows per DELETE statement, so a very large deletion stays fast and light
+
+
+def entries_about(employee):
+    """Audit entries the employee caused themselves, in their organization, except screenshot entries
+    (uploads, views, downloads, deletions). Used only for the employee's own Audits tab."""
+    return (
+        AuditLog.objects.filter(organization=employee.organization, actor=employee)
+        .exclude(target_type="screenshots.Screenshot")
+        .exclude(action__startswith="screenshot.")
+    )
 
 
 def record_event(actor, action, organization=None, target=None, detail=""):

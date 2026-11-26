@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Attendance{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Attendance</h1>
+    <p class="muted">Your own monitoring data only. Times are in {{ zone_label }}.</p>
+  </div>
+</div>
+
+<div class="card">
+  {% include "analytics/_filters.html" %}
+</div>
+
+<div class="card">
+  <div class="section-title"><h2>Attendance</h2></div>
+  <p class="muted">First and last activity each day, from monitoring data. Not an HR attendance record.</p>
+  <div class="table-wrap">
+    <table class="chart-table">
+      <tr><th>Day</th><th>First activity</th><th>Last activity</th><th>Records</th></tr>
+      {% for row in attendance %}
+        <tr><td>{{ row.day|date:"D j M Y" }}</td><td>{{ row.first|date:"H:i" }}</td><td>{{ row.last|date:"H:i" }}</td><td>{{ row.entries }}</td></tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">No activity recorded in these dates.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+</div>
+{% endblock %}

@@ -79,9 +79,9 @@ class EmployeeLivePanelTests(TestCase):
 
     def test_the_employee_page_includes_the_live_card_for_the_admin_only(self):
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(reverse("dashboard_employee", args=[self.emp.pk])), "Activity timeline")
+        self.assertContains(self.client.get(reverse("dashboard_employee", args=[self.emp.pk])), "<h2>Activity timeline</h2>")
         self.client.force_login(self.emp)
-        self.assertNotContains(self.client.get(reverse("dashboard_me")), "Activity timeline")
+        self.assertNotContains(self.client.get(reverse("dashboard_me")), "<h2>Activity timeline</h2>")
 
     def test_a_pc_with_no_data_says_so(self):
         self.client.force_login(self.admin)

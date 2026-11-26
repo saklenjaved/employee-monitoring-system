@@ -1,82 +1,160 @@
 {% extends "base.html" %}
 {% block title %}Admins{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span>Admins{% endblock %}
 {% block content %}
 <style>
   .row-menu { position: relative; display: inline-block; }
-  .row-menu > summary { list-style: none; cursor: pointer; padding: 2px 10px; border-radius: 6px; font-size: 1.2em; line-height: 1; user-select: none; }
+  .row-menu > summary { list-style: none; cursor: pointer; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 1.15em; line-height: 1; user-select: none; color: var(--c-muted); }
   .row-menu > summary::-webkit-details-marker { display: none; }
-  .row-menu > summary:hover, .row-menu[open] > summary { background: #eef2f7; }
-  .row-menu-list { position: absolute; right: 0; top: 100%; z-index: 20; min-width: 160px; display: flex; flex-direction: column; background: #fff; border: 1px solid #d9dee7; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; }
-  .row-menu-list a, .row-menu-list button { display: block; width: 100%; text-align: left; background: none; color: inherit; border: 0; padding: 8px 10px; border-radius: 6px; font: inherit; cursor: pointer; text-decoration: none; }
-  .row-menu-list a:hover, .row-menu-list button:hover { background: #f1f4f8; }
+  .row-menu > summary:hover, .row-menu[open] > summary { background: var(--c-surface-2); color: var(--c-text); }
+  /* While open, the script moves the menu to <body> and places it with position: fixed, so no table or
+     scroll container can clip it. It opens upward when there is no room below. */
+  .row-menu-list { position: absolute; right: 0; top: 100%; z-index: 80; min-width: 180px; display: flex; flex-direction: column; gap: 2px; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 10px; box-shadow: var(--shadow-lift); padding: 6px; }
+  .row-menu-list a, .row-menu-list button { display: block; width: 100%; text-align: left; background: none; color: var(--c-text); border: 0; padding: 8px 12px; border-radius: 6px; font: inherit; font-size: .9em; line-height: 1.2; white-space: nowrap; cursor: pointer; text-decoration: none; box-shadow: none; }
+  .row-menu-list a:hover, .row-menu-list button:hover { background: var(--c-surface-2); transform: none; box-shadow: none; }
   .row-menu-list form { margin: 0; }
-  .row-menu-list .danger-text { color: #b42318; }
+  .row-menu-list .danger-text { color: var(--c-danger); }
+  .admin-name { font-weight: 600; }
+  .admin-org a { color: var(--c-text); }
 </style>
+
+<div class="page-header">
+  <div>
+    <h1>Admins</h1>
+    <p class="muted">Every Admin account across all organizations. Find an Admin by name, email or organization.</p>
+  </div>
+  <div class="header-actions">
+    <a class="button secondary" href="{% url 'organization_list' %}">Manage organizations</a>
+  </div>
+</div>
+
 <div class="card">
-  <h1>Admins</h1>
-  <p class="muted">Every Admin account across all organizations. Find an Admin by name, email or organization.</p>
-  <p><a class="button" href="{% url 'organization_list' %}">Manage organizations</a></p>
   {% include "includes/_list_bar.html" %}
-  <table>
-    {% include "includes/_list_head.html" %}
-    {% for admin in listing.page %}
-      <tr>
-        <td>{{ admin.full_name }}</td>
-        <td>{{ admin.email }}</td>
-        <td>
-          {% if admin.organization %}
-            <a href="{% url 'organization_admin_create' admin.organization.pk %}">{{ admin.organization.name }}</a>
-            {% if not admin.organization.is_active %}<span class="badge badge-muted">Deactivated</span>{% endif %}
-          {% else %}-{% endif %}
-        </td>
-        <td>
-          {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
-          {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
-          {% else %}<span class="status bad">Inactive</span>{% endif %}
-        </td>
-        <td>{{ admin.date_joined|date:"j M Y" }}</td>
-        <td>
-          {% if admin.admin_status == "pending" %}
-            <form method="post" action="{% url 'organization_admin_resend_invite' admin.pk %}" class="inline-form">
-              {% csrf_token %}
-              <button type="submit" class="secondary">Resend invitation</button>
-            </form>
-          {% endif %}
-          <details class="row-menu">
-            <summary aria-label="Actions for {{ admin.email }}" title="Actions">&#8942;</summary>
-            <div class="row-menu-list" role="menu">
-              <a role="menuitem" href="{% url 'organization_admin_edit' admin.pk %}">Edit</a>
-              {% if admin.admin_status != "pending" %}
-                {% if admin.is_active %}
-                  <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}"
-                        data-confirm="Deactivate {{ admin.email }} as Admin of {{ admin.organization.name }}? They cannot sign in until reactivated."
-                        data-confirm-label="Deactivate" data-confirm-danger>
-                    {% csrf_token %}
-                    <input type="hidden" name="active" value="0">
-                    <button type="submit" role="menuitem">Deactivate</button>
-                  </form>
-                {% else %}
-                  <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}">
-                    {% csrf_token %}
-                    <input type="hidden" name="active" value="1">
-                    <button type="submit" role="menuitem">Activate</button>
-                  </form>
-                {% endif %}
+  <div class="table-wrap">
+    <table class="data-table">
+      {% include "includes/_list_head.html" %}
+      {% for admin in listing.page %}
+        <tr>
+          <td data-label="Name"><span class="admin-name">{{ admin.full_name }}</span></td>
+          <td data-label="Email">{{ admin.email }}</td>
+          <td data-label="Organization" class="admin-org">
+            {% if admin.organization %}
+              <a href="{% url 'organization_detail' admin.organization.pk %}">{{ admin.organization.name }}</a>
+              {% if not admin.organization.is_active %}<span class="badge badge-muted">Deactivated</span>{% endif %}
+            {% else %}-{% endif %}
+          </td>
+          <td data-label="Status">
+            {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
+            {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
+            {% else %}<span class="status bad">Inactive</span>{% endif %}
+          </td>
+          <td data-label="Created">{{ admin.date_joined|date:"j M Y" }}</td>
+          <td class="col-actions">
+            <div class="actions-cell">
+              {% if admin.admin_status == "pending" %}
+                <form method="post" action="{% url 'organization_admin_resend_invite' admin.pk %}" class="inline-form">
+                  {% csrf_token %}
+                  <button type="submit" class="btn-sm btn-view">Resend invitation</button>
+                </form>
               {% endif %}
-              <form method="post" action="{% url 'organization_admin_delete' admin.pk %}"
-                    data-confirm="Permanently delete {{ admin.email }} as Admin of {{ admin.organization.name }}? Their account is removed. The organization and its employees are kept."
-                    data-confirm-label="Delete" data-confirm-danger>
-                {% csrf_token %}
-                <button type="submit" role="menuitem" class="danger-text">Delete</button>
-              </form>
+              <details class="row-menu">
+                <summary aria-label="Actions for {{ admin.email }}" title="Actions">&#8942;</summary>
+                <div class="row-menu-list" role="menu">
+                  <a role="menuitem" href="{% url 'organization_admin_edit' admin.pk %}">Edit</a>
+                  {% if admin.admin_status != "pending" %}
+                    {% if admin.is_active %}
+                      <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}"
+                            data-confirm="Deactivate {{ admin.email }} as Admin of {{ admin.organization.name }}? They cannot sign in until reactivated."
+                            data-confirm-label="Deactivate" data-confirm-danger>
+                        {% csrf_token %}
+                        <input type="hidden" name="active" value="0">
+                        <button type="submit" role="menuitem">Deactivate</button>
+                      </form>
+                    {% else %}
+                      <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}">
+                        {% csrf_token %}
+                        <input type="hidden" name="active" value="1">
+                        <button type="submit" role="menuitem">Activate</button>
+                      </form>
+                    {% endif %}
+                  {% endif %}
+                  <form method="post" action="{% url 'organization_admin_delete' admin.pk %}"
+                        data-confirm="Permanently delete {{ admin.email }} as Admin of {{ admin.organization.name }}? Their account is removed. The organization and its employees are kept."
+                        data-confirm-label="Delete" data-confirm-danger>
+                    {% csrf_token %}
+                    <button type="submit" role="menuitem" class="danger-text">Delete</button>
+                  </form>
+                </div>
+              </details>
             </div>
-          </details>
-        </td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="6" class="muted">{% if listing.filtered %}No Admins match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.{% else %}No Admin accounts yet. Create an organization, then add its first Admin.{% endif %}</td></tr>
-    {% endfor %}
-  </table>
+          </td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="6" class="muted">{% if listing.filtered %}No Admins match your search or filters. <a href="{{ request.path }}">Clear search and filters</a>.{% else %}No Admin accounts yet. Create an organization, then add its first Admin.{% endif %}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
   {% include "includes/_list_footer.html" %}
 </div>
+<script>
+  // Row menus: open the menu outside the table, next to its button, and flip it upward when the space below is too small.
+  if (!window.rowMenusReady) { // the page can be swapped by htmx; attach the listeners only once
+  window.rowMenusReady = true;
+  (function () {
+    var MARGIN = 8, GAP = 6;
+    var open = null; // { details, list } for the menu that is open now
+
+    function close() {
+      if (!open) return;
+      open.details.removeAttribute("open");
+      open.details.appendChild(open.list); // back where it belongs, with its normal styles
+      open.list.removeAttribute("style");
+      open = null;
+    }
+
+    function place(list, summary) {
+      list.style.position = "fixed";
+      list.style.visibility = "hidden";
+      var rect = summary.getBoundingClientRect();
+      var width = list.offsetWidth, height = list.offsetHeight;
+      var left = Math.min(Math.max(MARGIN, rect.right - width), window.innerWidth - width - MARGIN);
+      var below = window.innerHeight - rect.bottom - MARGIN;
+      var above = rect.top - MARGIN;
+      var top = (below >= height + GAP || below >= above) ? rect.bottom + GAP : rect.top - GAP - height;
+      top = Math.min(Math.max(MARGIN, top), window.innerHeight - height - MARGIN);
+      list.style.left = left + "px";
+      list.style.top = top + "px";
+      list.style.right = "auto";
+      list.style.visibility = "";
+    }
+
+    // "toggle" does not bubble, so listen during capture on the document. Menus that htmx adds later work too.
+    document.addEventListener("toggle", function (event) {
+      var details = event.target;
+      if (!details.classList || !details.classList.contains("row-menu")) return;
+      if (details.open) {
+        if (open && open.details !== details) close();
+        var list = details.querySelector(".row-menu-list");
+        document.body.appendChild(list);
+        place(list, details.querySelector("summary"));
+        open = { details: details, list: list };
+      } else if (open && open.details === details) {
+        close();
+      }
+    }, true);
+
+    document.addEventListener("click", function (event) {
+      if (!open) return;
+      if (open.list.contains(event.target) || open.details.contains(event.target)) return;
+      close();
+    });
+    document.addEventListener("keydown", function (event) {
+      if (event.key === "Escape") close();
+    });
+    // Moving the page or the window would leave the menu in the wrong place, so close it.
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+  })();
+  }
+</script>
 {% endblock %}

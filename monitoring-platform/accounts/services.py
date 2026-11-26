@@ -4,9 +4,11 @@ Every function takes the logged-in user (`viewer`) as an argument. The
 organization always comes from that user on the server, never from request data.
 """
 import logging
+from urllib.parse import urlencode
 
 from django.conf import settings
 from django.contrib.auth.password_validation import validate_password
+from django.core import signing
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.db import transaction
@@ -22,6 +24,24 @@ from .models import ActivationCode, Membership, MembershipStatus, Role, Transfer
 from .ratelimit import client_ip, hit, key_for, too_many
 
 logger = logging.getLogger(__name__)
+
+INVITE_SALT = "accounts.activation-invite"  # a signature for this purpose only
+
+
+def invite_token(user):
+    """A signed token for the activation link. It holds only the account's ID, never the email address."""
+    return signing.dumps(user.pk, salt=INVITE_SALT)
+
+
+def invited_email(token):
+    """The email address for a token from an activation link, or "" if the token is missing or tampered with."""
+    if not token:
+        return ""
+    try:
+        pk = signing.loads(token, salt=INVITE_SALT)
+    except signing.BadSignature:
+        return ""
+    return User.objects.filter(pk=pk).values_list("email", flat=True).first() or ""
 
 RESEND_INVITE_LIMIT = 3  # resends per account
 RESEND_INVITE_WINDOW_SECONDS = 60 * 60
@@ -210,7 +230,7 @@ def send_activation_code(request, membership, code):
         "email": user.email,
         "role_label": membership.get_role_display(),
         "organization_name": membership.organization.name,
-        "activation_url": request.build_absolute_uri(reverse("activate")),
+        "activation_url": request.build_absolute_uri(reverse("activate")) + "?" + urlencode({"invite": invite_token(user)}),
         "expiry_hours": int(CODE_LIFETIME.total_seconds() // 3600),
     }
     subject = render_to_string("accounts/activation_subject.txt", context).strip()

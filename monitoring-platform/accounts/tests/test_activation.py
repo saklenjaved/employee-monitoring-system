@@ -178,16 +178,16 @@ class ActivationPageTests(TestCase):
         self.assertContains(response, "Activate your account")
         self.assertContains(response, 'name="code"')
 
-    def test_a_valid_code_activates_and_sends_the_user_to_sign_in(self):
+    def test_a_valid_code_activates_and_signs_the_employee_in_at_their_dashboard(self):
         _, _, code = open_invitation(self.admin, self.org, "new@acme.test", "New", Role.EMPLOYEE)
         response = self.client.post(
             reverse("activate"),
             {"email": "new@acme.test", "code": code, "password": NEW_PASSWORD, "password_confirm": NEW_PASSWORD},
             follow=True,
         )
-        self.assertRedirects(response, reverse("login"))
-        self.assertContains(response, "Your account is active. Sign in with your email and password.")
-        self.assertTrue(self.client.login(username="new@acme.test", password=NEW_PASSWORD))
+        self.assertRedirects(response, reverse("dashboard_me"))
+        self.assertContains(response, "Your account is active.")
+        self.assertIn("_auth_user_id", self.client.session)
 
     def test_a_wrong_code_shows_the_error_on_the_page(self):
         open_invitation(self.admin, self.org, "new@acme.test", "New", Role.EMPLOYEE)

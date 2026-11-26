@@ -14,7 +14,7 @@ from django.shortcuts import redirect, render
 from django.utils import timezone
 
 from access_control.permissions import role_required
-from audit.services import record_event
+from audit.services import entries_about, record_event
 from accounts.models import Role
 from monitoring.models import MonitoringPolicy
 from screenshots.models import ScreenshotPolicy
@@ -348,6 +348,51 @@ def _trend_response(request, employee_ids, widen=True):
     if widen:
         start, end = trend_range(start, end)
     return JsonResponse(daily_trend(organization, employee_ids, start, end))
+
+
+@role_required(Role.EMPLOYEE)
+def my_attendance(request):
+    """The employee's own attendance by day. Every query is for request.user only."""
+    user = request.user
+
+    def context(start, end):
+        return {
+            "employee": user,
+            "attendance": attendance_by_day(user, start, end),
+            **zone_context(user.organization),
+        }
+
+    return _page(request, "analytics/my_section.html", user.organization, context)
+
+
+AUDIT_ROWS_LIMIT = 200
+
+
+def _my_audit_row(entry, employee, zone):
+    """One audit entry for the employee's own Audits tab. Other people are shown as 'Administrator', never by name or email."""
+    if entry.actor_id is None:
+        who = "System"
+    elif entry.actor_id == employee.pk:
+        who = "You"
+    else:
+        who = "Administrator"
+    return {"time": entry.created_at.astimezone(zone), "action": entry.action, "who": who, "detail": entry.detail}
+
+
+@role_required(Role.EMPLOYEE)
+def my_audits(request):
+    """Audit entries about the signed-in employee only: their own actions, changes to their account, and
+    actions on their screenshots. Other employees' entries never reach this page."""
+    user = request.user
+    zone = display_zone()
+
+    def context(start, end):
+        start_at, end_at = local_day_bounds(start, end, zone)
+        entries = entries_about(user).filter(created_at__gte=start_at, created_at__lt=end_at).order_by("-created_at", "-id")
+        rows = [_my_audit_row(entry, user, zone) for entry in entries.select_related("actor")[:AUDIT_ROWS_LIMIT]]
+        return {"employee": user, "audits": rows, **zone_context(user.organization)}
+
+    return _page(request, "analytics/my_audits.html", user.organization, context)
 
 
 @role_required(Role.EMPLOYEE)

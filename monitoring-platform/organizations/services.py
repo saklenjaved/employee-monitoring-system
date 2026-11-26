@@ -1,13 +1,45 @@
+from datetime import timedelta
+from zoneinfo import ZoneInfo
+
+from django.conf import settings
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import ProtectedError
+from django.db.models import Count, ProtectedError, Q
 from django.db.models.deletion import Collector
+from django.utils import timezone
 
 from accounts.models import MembershipStatus, Role, User
-from accounts.services import set_user_active
+from accounts.services import platform_admins, set_user_active
 from audit.services import record_event
+from devices.models import Device
 
 from .models import Organization
+
+
+def organization_figures(viewer, organization):
+    """Live counts for one organization, using the same rules as the platform overview.
+
+    Admins are counted from the same list the Admin table uses, so the two numbers always agree.
+    Returns counts only: no employee-level monitoring data.
+    """
+    cutoff = timezone.now() - timedelta(seconds=settings.DEVICE_ONLINE_SECONDS)
+    admins = platform_admins(viewer).filter(organization=organization).aggregate(
+        total=Count("pk"),
+        active=Count("pk", filter=Q(admin_status="active")),
+        pending=Count("pk", filter=Q(admin_status="pending")),
+        inactive=Count("pk", filter=Q(admin_status="inactive")),
+    )
+    devices = Device.objects.filter(organization=organization, is_active=True)
+    return {
+        "admin_total": admins["total"],
+        "admin_active": admins["active"],
+        "admin_pending": admins["pending"],
+        "admin_inactive": admins["inactive"],
+        "employee_count": User.objects.filter(organization=organization, role=Role.EMPLOYEE).count(),
+        "device_count": devices.count(),
+        "online_count": devices.filter(last_seen_at__gte=cutoff).count(),
+        "updated_label": timezone.now().astimezone(ZoneInfo(settings.DISPLAY_TIMEZONE)).strftime("%d %b %Y, %I:%M:%S %p"),
+    }
 
 
 def create_organization(actor, name):

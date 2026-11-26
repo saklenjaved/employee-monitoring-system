@@ -7,7 +7,11 @@ Your activation code is:
 
     {{ code }}
 
-To activate your account, open {{ activation_url }}, enter your email address ({{ email }}) and this code.
+To activate your account, open this link:
+
+    {{ activation_url }}
+
+Your email address ({{ email }}) is filled in for you. Enter the code above.
 The code works once and expires in {{ expiry_hours }} hours.
 
 If you already have an Employee Monitoring password, use it after activating.

@@ -1,10 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Departments{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Departments{% endblock %}
 {% block content %}
 <div class="card">
   <h1>Departments</h1>
   {% include "includes/_list_bar.html" %}
-  <table>
+  <table class="data-table">
     {% include "includes/_list_head.html" %}
     {% for department in listing.page %}
       <tr><td>{{ department.name }}</td></tr>

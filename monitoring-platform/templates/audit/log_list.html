@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Audit logs{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Audit logs{% endblock %}
 {% block content %}
 <style>
   /* Audit logs page. Uses the page tokens from base.html, with the same card look as the Admin dashboard. */

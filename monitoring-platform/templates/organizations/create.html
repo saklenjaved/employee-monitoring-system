@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}New organization{% endblock %}
-{% block crumbs %}<a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span>New organization{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'organization_list' %}">Organizations</a><span class="sep">/</span>New organization{% endblock %}
 {% block content %}
 <div class="card">
   <h1>New organization</h1>

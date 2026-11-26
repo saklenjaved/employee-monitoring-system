@@ -45,7 +45,7 @@
   <h2>Devices</h2>
   <p class="muted">A PC stays connected after approval. It reconnects by itself and needs no new download, unless you revoke it.</p>
   <div class="table-wrap">
-  <table>
+  <table class="data-table">
     <tr><th>Name</th><th>Status</th><th>Last seen</th><th>Agent</th><th></th></tr>
     {% for device in devices %}
       <tr>
@@ -72,7 +72,7 @@
   <h2>Agent status</h2>
   <p class="muted">Reported by the agent on each check-in. Updates when the agent next reports.</p>
   <div class="table-wrap">
-  <table>
+  <table class="data-table">
     <tr><th>Name</th><th>Monitoring</th><th>Session</th><th>Queue</th><th>Last upload</th><th>Last error</th><th>Rules version</th></tr>
     {% for device in devices %}
       <tr>

@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% load analytics_extras %}
 {% block title %}My teams{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>My teams{% endblock %}
 {% block content %}
 <div class="card">
   <h1>My teams</h1>
   {% include "analytics/_filters.html" %}
-  <table>
+  <table class="data-table">
     <tr><th>Team</th><th>Employees</th><th>Application time</th><th>Productive share</th><th>Activity</th></tr>
     {% for row in rows %}
       <tr>

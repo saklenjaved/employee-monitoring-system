@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Registration code{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'person_list' %}">People</a><span class="sep">/</span><a href="{% url 'person_detail' person.pk %}">{{ person.full_name }}</a><span class="sep">/</span>Registration code{% endblock %}
 {% block content %}
 <div class="card">
   <h1>Registration code for {{ person.full_name }}</h1>

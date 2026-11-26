@@ -1,36 +1,58 @@
 {% extends "base.html" %}
 {% block title %}Organizations{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Organizations{% endblock %}
 {% block content %}
+<style>
+  .org-name { font-weight: 600; color: var(--c-text); }
+  .org-count { display: inline-flex; min-width: 28px; justify-content: center; padding: 2px 8px; border-radius: 999px; background: var(--c-surface-2); color: var(--c-text); font-weight: 700; font-size: .85em; }
+</style>
+
+<div class="page-header">
+  <div>
+    <h1>Organizations</h1>
+    <p class="muted">Open an organization to see its live figures and manage its Admins.</p>
+  </div>
+  <div class="header-actions">
+    <a class="button" href="{% url 'organization_create' %}">New organization</a>
+  </div>
+</div>
+
 <div class="card">
-  <h1>Organizations</h1>
-  <p class="muted">Open an organization to see and manage its Admins.</p>
-  <p><a class="button" href="{% url 'organization_create' %}">New organization</a></p>
-  <table>
-    <tr><th>Name</th><th>Status</th><th>Admins</th><th></th></tr>
-    {% for organization in organizations %}
-      <tr>
-        <td><a href="{% url 'organization_detail' organization.pk %}">{{ organization.name }}</a></td>
-        <td>
-          {% if organization.is_active %}<span class="status ok">Active</span>
-          {% else %}<span class="status bad">Deactivated</span>{% endif %}
-        </td>
-        <td>{{ organization.admin_count }}</td>
-        <td>
-          <form method="post" action="{% url 'organization_set_active' organization.pk %}" class="inline-form"{% if organization.is_active %} data-confirm="Deactivate this organization? Its people will be signed out and cannot use their devices." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
-            {% csrf_token %}
-            {% if organization.is_active %}
-              <input type="hidden" name="active" value="0">
-              <button type="submit" class="secondary">Deactivate</button>
-            {% else %}
-              <input type="hidden" name="active" value="1">
-              <button type="submit">Activate</button>
-            {% endif %}
-          </form>
-        </td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="4" class="muted">No organizations yet.</td></tr>
-    {% endfor %}
-  </table>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr><th>Name</th><th>Status</th><th>Admins</th><th class="col-actions">Actions</th></tr>
+      </thead>
+      <tbody>
+        {% for organization in organizations %}
+          <tr>
+            <td data-label="Name"><span class="org-name">{{ organization.name }}</span></td>
+            <td data-label="Status">
+              {% if organization.is_active %}<span class="status ok">Active</span>
+              {% else %}<span class="status bad">Deactivated</span>{% endif %}
+            </td>
+            <td data-label="Admins"><span class="org-count">{{ organization.admin_count }}</span></td>
+            <td class="col-actions">
+              <div class="actions-cell">
+                <a class="btn-sm btn-view" href="{% url 'organization_detail' organization.pk %}" aria-label="View {{ organization.name }}">View</a>
+                <form method="post" action="{% url 'organization_set_active' organization.pk %}" class="inline-form"{% if organization.is_active %} data-confirm="Deactivate this organization? Its people will be signed out and cannot use their devices." data-confirm-label="Deactivate" data-confirm-danger{% endif %}>
+                  {% csrf_token %}
+                  {% if organization.is_active %}
+                    <input type="hidden" name="active" value="0">
+                    <button type="submit" class="btn-sm btn-deactivate">Deactivate</button>
+                  {% else %}
+                    <input type="hidden" name="active" value="1">
+                    <button type="submit" class="btn-sm btn-activate">Activate</button>
+                  {% endif %}
+                </form>
+              </div>
+            </td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="muted">No organizations yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </div>
 {% endblock %}

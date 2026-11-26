@@ -1,75 +1,166 @@
 {% extends "base.html" %}
 {% block title %}Platform dashboard{% endblock %}
+{% block crumbs %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>Platform{% endblock %}
 {% block content %}
-<div class="card">
-  <h1>Platform</h1>
-  <p class="muted">Counts only. Employee monitoring data is not shown here.</p>
-  <div class="tiles">
-    <div class="tile"><a href="{% url 'organization_list' %}"><span class="tile-value">{{ report.organization_count }}</span><span class="tile-label">Organizations ({{ report.active_organization_count }} active, {{ report.inactive_organization_count }} inactive)</span></a></div>
-    <div class="tile"><a href="{% url 'admin_list' %}"><span class="tile-value">{{ report.admin_count }}</span><span class="tile-label">Total Admins</span></a></div>
-    <div class="tile"><a href="{% url 'admin_list' %}?status=active"><span class="tile-value">{{ report.active_admin_count }}</span><span class="tile-label">Active Admins</span></a></div>
-    <div class="tile"><a href="{% url 'admin_list' %}?status=pending"><span class="tile-value">{{ report.pending_admin_count }}</span><span class="tile-label">Pending invitations</span></a></div>
-    <div class="tile"><span class="tile-value">{{ report.employee_count }}</span><span class="tile-label">Employees</span></div>
-    <div class="tile"><span class="tile-value">{{ report.online_count }} / {{ report.device_count }}</span><span class="tile-label">Agents online</span></div>
+<div class="page-header">
+  <div>
+    <h1>Platform overview</h1>
+    <p class="muted">Counts only. Employee monitoring data is not shown here.</p>
   </div>
-  <p>
+  <div class="header-actions">
     <a class="button" href="{% url 'organization_list' %}">Manage organizations</a>
     <a class="button secondary" href="{% url 'admin_list' %}">Manage Admins</a>
-  </p>
+  </div>
 </div>
-<div class="card">
-  <h2>Organizations</h2>
-  <table>
-    <tr><th>Name</th><th>Status</th><th>Employees</th><th>Admins</th><th>Agents online</th></tr>
-    {% for org in report.organizations %}
-      <tr>
-        <td>{{ org.name }}</td>
-        <td>{% if org.is_active %}<span class="status ok">Active</span>{% else %}<span class="status bad">Deactivated</span>{% endif %}</td>
-        <td>{{ org.employee_count }}</td>
-        <td><a href="{% url 'admin_list' %}?organization={{ org.pk }}">{{ org.admin_count }}</a></td>
-        <td>{{ org.online_count }} / {{ org.device_count }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5" class="muted">No organizations yet.</td></tr>
-    {% endfor %}
-  </table>
+
+<style>
+  .plat-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 0 0 16px; }
+  .plat-stat { position: relative; background: var(--c-surface); border: 1px solid var(--c-border); border-radius: var(--radius); padding: 12px 14px; overflow: hidden; }
+  .plat-stat::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--brand-grad); }
+  .plat-stat a { color: inherit; text-decoration: none; display: block; }
+  .plat-stat:hover { box-shadow: var(--shadow-lift); }
+  .plat-stat-value { display: block; font-size: 1.25em; font-weight: 800; letter-spacing: -.01em; }
+  .plat-stat-label { display: block; color: var(--c-muted); font-size: .8em; margin-top: 2px; }
+  .plat-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin: 0 0 12px; }
+  .plat-toolbar h2 { margin: 0; }
+  .plat-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .plat-controls input[type=search] { width: 220px; max-width: 100%; height: 34px; padding: 0 12px; font-size: .9em; }
+  .plat-chips { display: flex; gap: 6px; }
+  .plat-chip { height: 34px; padding: 0 12px; font-size: .85em; border-radius: 999px; background: var(--c-surface-2); color: var(--c-muted); border: 1px solid var(--c-border); box-shadow: none; }
+  .plat-chip[aria-pressed="true"] { background: var(--c-primary); color: #fff; border-color: transparent; }
+  .plat-empty { display: none; }
+  @media (max-width: 600px) { .plat-controls input[type=search] { width: 100%; } }
+</style>
+
+<div class="plat-stats">
+  <div class="plat-stat"><a href="{% url 'organization_list' %}"><span class="plat-stat-value">{{ report.organization_count }}</span><span class="plat-stat-label">Organizations · {{ report.active_organization_count }} active, {{ report.inactive_organization_count }} inactive</span></a></div>
+  <div class="plat-stat"><a href="{% url 'admin_list' %}"><span class="plat-stat-value">{{ report.admin_count }}</span><span class="plat-stat-label">Total Admins</span></a></div>
+  <div class="plat-stat"><a href="{% url 'admin_list' %}?status=active"><span class="plat-stat-value">{{ report.active_admin_count }}</span><span class="plat-stat-label">Active Admins</span></a></div>
+  <div class="plat-stat"><a href="{% url 'admin_list' %}?status=pending"><span class="plat-stat-value">{{ report.pending_admin_count }}</span><span class="plat-stat-label">Pending invitations</span></a></div>
+  <div class="plat-stat"><span class="plat-stat-value">{{ report.employee_count }}</span><span class="plat-stat-label">Employees</span></div>
+  <div class="plat-stat"><span class="plat-stat-value">{{ report.online_count }} / {{ report.device_count }}</span><span class="plat-stat-label">Agents online</span></div>
 </div>
+
 <div class="card">
-  <h2>Admins across all organizations</h2>
-  <table>
-    <tr><th>Name</th><th>Email</th><th>Organization</th><th>Status</th><th>Created</th></tr>
-    {% for admin in report.admins %}
-      <tr>
-        <td>{{ admin.full_name }}</td>
-        <td>{{ admin.email }}</td>
-        <td>{{ admin.organization.name|default:"-" }}</td>
-        <td>
-          {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
-          {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
-          {% else %}<span class="status bad">Inactive</span>{% endif %}
-        </td>
-        <td>{{ admin.date_joined|date:"j M Y" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="5" class="muted">No Admin accounts yet.</td></tr>
-    {% endfor %}
-  </table>
+  <div class="plat-toolbar">
+    <h2>Organizations</h2>
+    <div class="plat-controls">
+      <input type="search" id="org-search" placeholder="Search organizations" aria-label="Search organizations">
+      <div class="plat-chips" role="group" aria-label="Filter by status">
+        <button type="button" class="plat-chip" data-filter="all" aria-pressed="true">All</button>
+        <button type="button" class="plat-chip" data-filter="active" aria-pressed="false">Active</button>
+        <button type="button" class="plat-chip" data-filter="inactive" aria-pressed="false">Deactivated</button>
+      </div>
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <tr><th>Name</th><th>Status</th><th>Employees</th><th>Admins</th><th>Agents online</th></tr>
+      {% for org in report.organizations %}
+        <tr class="js-row" data-status="{% if org.is_active %}active{% else %}inactive{% endif %}" data-search="{{ org.name|lower }}">
+          <td>{{ org.name }}</td>
+          <td>{% if org.is_active %}<span class="status ok">Active</span>{% else %}<span class="status bad">Deactivated</span>{% endif %}</td>
+          <td>{{ org.employee_count }}</td>
+          <td><a href="{% url 'admin_list' %}?organization={{ org.pk }}">{{ org.admin_count }}</a></td>
+          <td>{{ org.online_count }} / {{ org.device_count }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No organizations yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="muted plat-empty" id="org-empty">No organizations match this search.</p>
+</div>
+
+<div class="card">
+  <div class="plat-toolbar">
+    <h2>Admins across all organizations</h2>
+    <div class="plat-controls">
+      <input type="search" id="admin-search" placeholder="Search admins" aria-label="Search admins">
+    </div>
+  </div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <tr><th>Name</th><th>Email</th><th>Organization</th><th>Status</th><th>Created</th></tr>
+      {% for admin in report.admins %}
+        <tr class="js-admin-row" data-search="{{ admin.full_name|lower }} {{ admin.email|lower }} {{ admin.organization.name|lower }}">
+          <td>{{ admin.full_name }}</td>
+          <td>{{ admin.email }}</td>
+          <td>{{ admin.organization.name|default:"-" }}</td>
+          <td>
+            {% if admin.admin_status == "active" %}<span class="status ok">Active</span>
+            {% elif admin.admin_status == "pending" %}<span class="status wait">Pending</span>
+            {% else %}<span class="status bad">Inactive</span>{% endif %}
+          </td>
+          <td>{{ admin.date_joined|date:"j M Y" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="5" class="muted">No Admin accounts yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="muted plat-empty" id="admin-empty">No admins match this search.</p>
   {% if report.admins %}<p><a href="{% url 'admin_list' %}">Manage Admins (activate or deactivate)</a></p>{% endif %}
 </div>
+
 <div class="card">
   <h2>Recent administrative activity</h2>
-  <table>
-    <tr><th>When</th><th>Who</th><th>Action</th><th>Organization</th></tr>
-    {% for entry in report.recent_activity %}
-      <tr>
-        <td>{{ entry.created_at|date:"j M Y H:i" }}</td>
-        <td>{{ entry.actor_email }}</td>
-        <td>{{ entry.action }}</td>
-        <td>{{ entry.organization.name|default:"-" }}</td>
-      </tr>
-    {% empty %}
-      <tr><td colspan="4" class="muted">Nothing yet.</td></tr>
-    {% endfor %}
-  </table>
+  <div class="table-wrap">
+    <table class="data-table">
+      <tr><th>When</th><th>Who</th><th>Action</th><th>Organization</th></tr>
+      {% for entry in report.recent_activity %}
+        <tr>
+          <td>{{ entry.created_at|date:"j M Y H:i" }}</td>
+          <td>{{ entry.actor_email }}</td>
+          <td>{{ entry.action }}</td>
+          <td>{{ entry.organization.name|default:"-" }}</td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="4" class="muted">Nothing yet.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
 </div>
+
+<script>
+(function () {
+  var orgSearch = document.getElementById("org-search");
+  var orgRows = Array.prototype.slice.call(document.querySelectorAll(".js-row"));
+  var orgChips = Array.prototype.slice.call(document.querySelectorAll(".plat-chip"));
+  var orgFilter = "all";
+
+  function applyOrgFilters() {
+    var text = orgSearch.value.trim().toLowerCase();
+    var shown = 0;
+    orgRows.forEach(function (row) {
+      var matchStatus = orgFilter === "all" || row.dataset.status === orgFilter;
+      var matchText = !text || row.dataset.search.indexOf(text) !== -1;
+      row.hidden = !(matchStatus && matchText);
+      if (!row.hidden) shown += 1;
+    });
+    document.getElementById("org-empty").style.display = orgRows.length && !shown ? "block" : "none";
+  }
+
+  orgSearch.addEventListener("input", applyOrgFilters);
+  orgChips.forEach(function (chip) {
+    chip.addEventListener("click", function () {
+      orgFilter = chip.dataset.filter;
+      orgChips.forEach(function (other) { other.setAttribute("aria-pressed", String(other === chip)); });
+      applyOrgFilters();
+    });
+  });
+
+  var adminSearch = document.getElementById("admin-search");
+  var adminRows = Array.prototype.slice.call(document.querySelectorAll(".js-admin-row"));
+  adminSearch.addEventListener("input", function () {
+    var text = adminSearch.value.trim().toLowerCase();
+    var shown = 0;
+    adminRows.forEach(function (row) {
+      row.hidden = !!text && row.dataset.search.indexOf(text) === -1;
+      if (!row.hidden) shown += 1;
+    });
+    document.getElementById("admin-empty").style.display = adminRows.length && !shown ? "block" : "none";
+  });
+})();
+</script>
 {% endblock %}
