@@ -152,6 +152,8 @@ $Installer = Join-Path $Root "dist\WinAgentSetup-$Version.exe"
 # WINAGENT_API_URL (https://...) is built into the installer as its default server address.
 $IsccArgs = @("/Q")
 if ($env:WINAGENT_API_URL) { $IsccArgs += "/DDefaultApiUrl=$($env:WINAGENT_API_URL)" }
+# WINAGENT_DASHBOARD_URL (https://... or http://...) is the employee's dashboard page the installer opens after installing.
+if ($env:WINAGENT_DASHBOARD_URL) { $IsccArgs += "/DDefaultDashboardUrl=$($env:WINAGENT_DASHBOARD_URL)" }
 # WINAGENT_CA_FILE (optional) is built in as the default CA file, for a private or demo certificate. It must exist on the PC.
 if ($env:WINAGENT_CA_FILE) { $IsccArgs += "/DDefaultCaFile=$($env:WINAGENT_CA_FILE)" }
 # WINAGENT_SCREENSHOTS=1 turns on the PC-side screenshot setting. The organization's policy must be on too. Off by default.

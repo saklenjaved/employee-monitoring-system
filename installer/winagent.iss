@@ -7,6 +7,9 @@
 
 #define AppVersion "0.1.0"
 
+#ifndef DefaultDashboardUrl
+  #define DefaultDashboardUrl ""
+#endif
 #ifndef DefaultApiUrl
   #define DefaultApiUrl ""
 #endif
@@ -51,6 +54,22 @@ var
   CaFile: string;
   OrgToken: string;
   ScreenshotsOn: Boolean;
+
+function DashboardUrl(Param: string): string;
+var
+  P: Integer;
+  Root: string;
+begin
+  // The employee's dashboard: /DASHBOARDURL, else the address set at build time, else the API's own address.
+  Result := ExpandConstant('{param:DASHBOARDURL|}');
+  if Result = '' then Result := '{#DefaultDashboardUrl}';
+  if Result = '' then
+  begin
+    P := Pos('/api/agent/v1', ApiUrl);
+    if P > 0 then Root := Copy(ApiUrl, 1, P - 1) else Root := ApiUrl;
+    Result := Root + '/dashboard/me/';
+  end;
+end;
 
 function TokenIsSafe(Token: string): Boolean;
 var
@@ -132,6 +151,12 @@ var
   ResultCode: Integer;
 begin
   // Written before the files are copied, so it already exists when the [Run] sign-in step starts.
+  if CurStep = ssPostInstall then
+  begin
+    // The installer opens the employee's dashboard itself (see [Run]). This marker tells the agent not to open it again.
+    ForceDirectories(ExpandConstant('{localappdata}\WinAgent'));
+    SaveStringToFile(ExpandConstant('{localappdata}\WinAgent\dashboard_opened'), 'opened', False);
+  end;
   if CurStep = ssInstall then
   begin
     // Stop a running agent first, so its files can be replaced (otherwise Windows reports "Access is denied").
@@ -163,6 +188,8 @@ end;
 Filename: "{app}\winagent.exe"; Parameters: "autostart enable --config ""{app}\config.toml"""; Flags: runhidden
 ; Start now, hidden. With no credential yet, the agent asks the server to connect and waits for approval.
 Filename: "{app}\winagent.exe"; Parameters: "run --config ""{app}\config.toml"""; Flags: runhidden nowait
+; After installing, open the employee's dashboard in the browser of the signed-in user, which uses their existing session.
+Filename: "{code:DashboardUrl|}"; Flags: shellexec postinstall nowait runasoriginaluser
 
 [UninstallDelete]
 ; Uninstall removes what the agent wrote, so a reinstall starts clean and no enrollment token stays on disk.

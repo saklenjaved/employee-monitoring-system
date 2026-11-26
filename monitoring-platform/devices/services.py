@@ -20,7 +20,7 @@ from audit.services import record_event
 from monitoring.services import policy_for_agent
 from screenshots.services import agent_screenshot_policy, version_offset
 
-from .models import Device, RegistrationCode, SetupWindow
+from .models import Device, MonitoringStart, PairingRequest, RegistrationCode, SetupWindow
 from .start import AGENT_ACCEPTING_STATES, confirm_start
 
 logger = logging.getLogger(__name__)
@@ -100,29 +100,52 @@ def register_device(code, device_name, os_version, agent_version, architecture="
 
 
 def revoke_device(actor, device):
-    """Stop a device from using its credential. Does nothing if it is already revoked."""
-    if not device.is_active:
-        return
+    """Stop a device from using its credential and reset the employee's whole setup.
+
+    The reset runs every time, even when the device was already revoked, so a repeat revoke starts the setup over.
+    """
     with transaction.atomic():
-        device.is_active = False
-        device.save(update_fields=["is_active"])
-        record_event(actor, "device.revoked", organization=device.organization, target=device)
+        if device.is_active:
+            device.is_active = False
+            device.save(update_fields=["is_active"])
+            record_event(actor, "device.revoked", organization=device.organization, target=device)
+        reset_setup(device.user)
 
 
 def revoke_devices_for(actor, organization, user):
-    """Revoke every working device of `user` in `organization` and stop their unused registration codes.
+    """Revoke every working device of `user` in `organization`, reset their setup and stop their unused registration codes.
 
-    Used when the person leaves the organization. The devices and everything they sent stay as history.
-    Returns how many devices were revoked.
+    Used when the person leaves the organization, and when an Admin deactivates or reactivates them. The devices and
+    everything they sent stay as history. Returns how many devices were revoked.
     """
     now = timezone.now()
     devices = list(Device.objects.filter(organization=organization, user=user, is_active=True))
-    for device in devices:
-        revoke_device(actor, device)
-    RegistrationCode.objects.filter(
-        organization=organization, user=user, used_at__isnull=True, expires_at__gt=now
-    ).update(expires_at=now)
+    with transaction.atomic():
+        for device in devices:
+            revoke_device(actor, device)
+        reset_setup(user)
+        RegistrationCode.objects.filter(
+            organization=organization, user=user, used_at__isnull=True, expires_at__gt=now
+        ).update(expires_at=now)
     return len(devices)
+
+
+def reset_setup(user):
+    """Send the employee back to the start of the whole setup: download, install, password, Admin start, approval.
+
+    The old download's token stops working, so the old agent cannot ask to connect again. The setup windows close,
+    every approval, start or running monitoring for this employee ends, and pending pairing requests expire.
+    """
+    now = timezone.now()
+    SetupWindow.objects.filter(user=user).update(install_token_hash="")
+    SetupWindow.objects.filter(user=user, closed_at__isnull=True).update(closed_at=now)
+    MonitoringStart.objects.filter(
+        user=user,
+        status__in=[MonitoringStart.Status.AWAITING_CONSENT, MonitoringStart.Status.PENDING, MonitoringStart.Status.CONFIRMED],
+    ).update(status=MonitoringStart.Status.EXPIRED, expires_at=now)
+    PairingRequest.objects.filter(
+        organization=user.organization, status=PairingRequest.Status.PENDING
+    ).update(status=PairingRequest.Status.EXPIRED, expires_at=now)
 
 
 def record_heartbeat(device, data):

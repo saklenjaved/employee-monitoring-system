@@ -207,4 +207,8 @@ def set_person_active(actor, person, active):
     if pending_membership(person) is not None:
         # Only the activation code opens a pending account. Send a new code instead.
         raise ValueError("This person has not activated the account yet.")
+    from devices.services import revoke_devices_for  # local import: devices and workforce import each other
+
     set_user_active(actor, person, active)
+    # Deactivating or reactivating resets the whole setup, so the employee downloads and installs WinAgent again.
+    revoke_devices_for(actor, actor.organization, person)
