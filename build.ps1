@@ -149,13 +149,44 @@ Sign-File $AgentExe
 # --- 4. Installer ------------------------------------------------------------------------------
 
 $Installer = Join-Path $Root "dist\WinAgentSetup-$Version.exe"
-# WINAGENT_API_URL (https://...) is built into the installer as its default server address.
-$IsccArgs = @("/Q")
-if ($env:WINAGENT_API_URL) { $IsccArgs += "/DDefaultApiUrl=$($env:WINAGENT_API_URL)" }
+# The server address is built into the installer as its default. Use WINAGENT_API_URL if set; otherwise use
+# AGENT_BASE_URL from monitoring-platform\.env, the same address the server uses. A build with no address is refused,
+# so an installer that asks for /APIURL is never released by mistake.
+function Get-ServerSetting([string]$Name) {
+    $EnvFile = Join-Path $Root "monitoring-platform\.env"
+    if (-not (Test-Path -LiteralPath $EnvFile -PathType Leaf)) { return "" }
+    $Line = Get-Content -LiteralPath $EnvFile | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -First 1
+    if (-not $Line) { return "" }
+    return ($Line -replace "^\s*$Name\s*=\s*", "").Trim().Trim('"')
+}
+$ApiUrl = $env:WINAGENT_API_URL
+$CaFile = $env:WINAGENT_CA_FILE
+$DashboardUrl = $env:WINAGENT_DASHBOARD_URL
+if (-not $ApiUrl) {
+    $ApiUrl = Get-ServerSetting "AGENT_BASE_URL"
+    # After install the browser goes to the website the employee signs in on (SITE_URL), not to the API address,
+    # so their sign-in is kept.
+    $SiteUrl = Get-ServerSetting "SITE_URL"
+    if (-not $DashboardUrl -and $SiteUrl) { $DashboardUrl = $SiteUrl.TrimEnd('/') + "/dashboard/me/" }
+    # A local CA file belongs to the local server, so it is read from .env only together with that address.
+    $LocalCa = Get-ServerSetting "AGENT_CA_BUNDLE"
+    if (-not $CaFile -and $LocalCa) {
+        if (-not [IO.Path]::IsPathRooted($LocalCa)) { $LocalCa = Join-Path $Root $LocalCa }
+        $CaFile = [IO.Path]::GetFullPath($LocalCa)
+        if (-not (Test-Path -LiteralPath $CaFile -PathType Leaf)) { Stop-Build "AGENT_CA_BUNDLE points to '$CaFile', but that file does not exist" }
+    }
+}
+if ($ApiUrl -notlike "https://*") { Stop-Build "No https:// server address: set WINAGENT_API_URL, or AGENT_BASE_URL in monitoring-platform\.env" }
+Write-Host "Installer server address: $ApiUrl"
+if ($CaFile) { Write-Host "Installer CA file: $CaFile" }
+$IsccArgs = @("/Q", "/DDefaultApiUrl=$ApiUrl")
 # WINAGENT_DASHBOARD_URL (https://... or http://...) is the employee's dashboard page the installer opens after installing.
-if ($env:WINAGENT_DASHBOARD_URL) { $IsccArgs += "/DDefaultDashboardUrl=$($env:WINAGENT_DASHBOARD_URL)" }
+if ($DashboardUrl) {
+    $IsccArgs += "/DDefaultDashboardUrl=$DashboardUrl"
+    Write-Host "Installer opens after install: $DashboardUrl"
+}
 # WINAGENT_CA_FILE (optional) is built in as the default CA file, for a private or demo certificate. It must exist on the PC.
-if ($env:WINAGENT_CA_FILE) { $IsccArgs += "/DDefaultCaFile=$($env:WINAGENT_CA_FILE)" }
+if ($CaFile) { $IsccArgs += "/DDefaultCaFile=$CaFile" }
 # WINAGENT_SCREENSHOTS=1 turns on the PC-side screenshot setting. The organization's policy must be on too. Off by default.
 if ($env:WINAGENT_SCREENSHOTS -eq "1") { $IsccArgs += "/DDefaultScreenshots=1" }
 Invoke-Native "Inno Setup" { & $Iscc @IsccArgs (Join-Path $Root "installer\winagent.iss") }

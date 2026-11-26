@@ -17,6 +17,17 @@ if ($listeners) {
     throw "Port $Port is already in use by process $owner. Close the terminal that runs the old server, or stop that process, then run this script again."
 }
 
+# The installed Windows agent connects to the HTTPS API on port 8443, not to this server. Without that API a new
+# PC cannot register, so the Employee Dashboard never shows the approval (password) card. It opens in its own
+# window and keeps running until that window is stopped with Ctrl+C.
+if (netstat -ano | Select-String ":8443\s" | Select-String "LISTENING") {
+    Write-Host "The agent API is already running on port 8443."
+} else {
+    $AgentApi = Join-Path $PSScriptRoot "run_https.ps1"
+    Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoExit", "-ExecutionPolicy", "Bypass", "-File", "`"$AgentApi`"")
+    Write-Host "Started the agent API (https://127.0.0.1:8443/) in a new window. Keep that window open."
+}
+
 Push-Location $Server
 # The dashboards read daily totals, which build_summaries makes from the agents' raw events. Without it the
 # dashboards show no usage even while agents send data. It runs in the background every minute while this

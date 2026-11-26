@@ -79,11 +79,20 @@ class ConnectionStagesTests(TestCase):
         response = self.client.get(reverse("dashboard_me"))
         self.assertContains(response, '<li data-step="4" class="current" aria-current="step">PC connected')
 
-    def test_a_waiting_pc_moves_the_current_step_to_approval(self):
-        open_setup_window(self.admin, self.emp)
-        create_pairing_request(PC, self.org)
+    def test_the_password_card_replaces_the_download_card_once_the_installed_pc_asks_to_connect(self):
         self.client.force_login(self.emp)
-        response = self.client.get(reverse("dashboard_me"))
-        self.assertContains(response, 'class="done"')
-        self.assertContains(response, "Download WinAgent")
-        self.assertContains(response, 'class="current" aria-current="step">Approve this PC')
+        before = self.client.get(reverse("dashboard_me"))
+        self.assertContains(before, "Download WinAgent setup")
+        self.assertNotContains(before, 'name="current_password"')
+
+        open_setup_window(self.admin, self.emp)  # what downloading the installer does
+        downloaded = self.client.get(reverse("dashboard_me"))
+        self.assertContains(downloaded, "Waiting for WinAgent.")
+        self.assertContains(downloaded, "hx-trigger=\"every 4s")
+
+        create_pairing_request(PC, self.org)  # the installed agent registers with the server
+        refreshed = self.client.get(reverse("dashboard_me"), HTTP_HX_REQUEST="true")  # the page's own refresh
+        self.assertContains(refreshed, "Approve this PC?")
+        self.assertContains(refreshed, 'name="current_password"')
+        self.assertNotContains(refreshed, "Download WinAgent")
+        self.assertNotContains(refreshed, 'id="monitoring"')

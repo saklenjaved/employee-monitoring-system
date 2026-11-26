@@ -250,10 +250,13 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
     "EXCEPTION_HANDLER": "devices.api_errors.agent_exception_handler",
-    # Per device, except registration (per IP address). Defaults to confirm. An agent catching up on
+    # Per device, except registration and pairing requests (per IP address). Defaults to confirm. An agent catching up on
     # a full queue of 10,000 events sends 20 batches, well inside the events limit.
     "DEFAULT_THROTTLE_RATES": {
         "agent_register": "10/hour",
+        # A PC asking to be connected. It needs a valid install token, and the employee still approves it with a
+        # password. A waiting PC asks about 6 times an hour, and several PCs can share one address.
+        "agent_pairing_request": "60/hour",
         "agent_events": "60/minute",
         "agent_calls": "30/minute",
         "agent_pairing_poll": "600/hour",

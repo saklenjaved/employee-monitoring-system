@@ -112,7 +112,7 @@ Decisions marked "default, to confirm" (Phase 2):
 - Only people with the Employee role get devices. Managers and Admins do not.
 - The default monitoring policy is Monday to Friday, 09:00 to 18:00, sample every 30 s, idle after 300 s.
 - A device counts as online if its last heartbeat is less than 15 minutes old.
-- Registration attempts are limited to 10 per hour per address. The counter lives in process memory, so production needs a shared cache.
+- Registration attempts are limited to 10 per hour per address. Pairing requests (a PC asking to be connected) have their own limit of 60 per hour per address. The counters live in process memory, so production needs a shared cache.
 - A Super Admin cannot see employee-level data or screenshots.
 
 Decisions marked "default, to confirm" (Phase 1):
@@ -135,6 +135,8 @@ Then start the server. Use this script, which refuses to start while another ser
 ```powershell
 .\monitoring-platform\scripts\start_local.ps1
 ```
+
+The script also starts the HTTPS agent API on port 8443 in a second window, unless it is already running. Installed PCs connect to that API, so without it a new PC cannot register and no approval card appears. If Windows blocks the script, run it as `powershell -ExecutionPolicy Bypass -File .\monitoring-platform\scripts\start_local.ps1`.
 
 Run only one server at a time. On Windows, a second `runserver` can share the port with an old one, and then some requests reach the old server, which may still have old settings (for example old mail settings). If the script reports that port 8000 is in use, close the terminal of the old server first.
 

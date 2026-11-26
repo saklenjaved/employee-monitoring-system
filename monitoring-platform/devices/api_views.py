@@ -192,7 +192,9 @@ class PairingRequestView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
     throttle_classes = [ScopedRateThrottle]
-    throttle_scope = "agent_register"
+    # Its own limit. Sharing the registration limit used it up after a few installs, and then the employee's
+    # dashboard never showed the approval card, because no request reached the server.
+    throttle_scope = "agent_pairing_request"
 
     def post(self, request):
         serializer = PairingRequestSerializer(data=request.data)

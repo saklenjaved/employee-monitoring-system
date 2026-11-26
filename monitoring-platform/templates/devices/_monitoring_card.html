@@ -20,25 +20,26 @@
 {% endfor %}
 
 {% if connection == "not_connected" %}
+{# The download card. While a PC waits for approval, the password card above takes its place. #}
+{% if not waiting_pcs %}
 <div class="card pc-card" id="monitoring">
   <div class="pc-card-head">
     <div>
       <h2>PC connection</h2>
       <p class="muted">Set up monitoring on your computer in four steps.</p>
     </div>
-    {% if waiting_pcs %}<span class="status wait">Approval needed</span>{% else %}<span class="status bad">Not connected</span>{% endif %}
+    <span class="status bad">Not connected</span>
   </div>
   <p>Install WinAgent on your PC. When it connects, an <strong>Approve this PC</strong> button appears here. Enter your password once.</p>
   <ol class="stages" aria-label="Connection steps">
-    <li data-step="1" class="{% if waiting_pcs or setup_open %}done{% else %}current{% endif %}" {% if not waiting_pcs and not setup_open %}aria-current="step"{% endif %}>Download WinAgent</li>
-    <li data-step="2" class="{% if waiting_pcs %}done{% else %}current{% endif %}" {% if not waiting_pcs %}aria-current="step"{% endif %}>Install WinAgent</li>
-    <li data-step="3" class="{% if waiting_pcs %}current{% endif %}" {% if waiting_pcs %}aria-current="step"{% endif %}>Approve this PC</li>
+    <li data-step="1" {% if setup_open %}class="done"{% else %}class="current" aria-current="step"{% endif %}>Download WinAgent</li>
+    <li data-step="2" class="current" aria-current="step">Install WinAgent</li>
+    <li data-step="3">Approve this PC</li>
     <li data-step="4">PC connected</li>
   </ol>
-  {% if setup_open and not waiting_pcs %}
+  {% if setup_open %}
   <p><strong>Waiting for WinAgent.</strong> Open the downloaded <strong>WinAgentSetup</strong> file on your PC. This page updates by itself and shows an <strong>Approve this PC</strong> button as soon as WinAgent is installed.</p>
   {% endif %}
-  {% if not waiting_pcs %}
   <form method="post" action="{% url 'install_package' %}" class="pc-action">
     {% csrf_token %}
     <h3>Install WinAgent on this PC?</h3>
@@ -47,8 +48,8 @@
     <button type="submit">Download WinAgent setup</button>
     <p class="help">Open the downloaded <strong>WinAgentSetup</strong> file once. It installs WinAgent in the background, with no command window. This page then asks you to approve the PC.</p>
   </form>
-  {% endif %}
 </div>
+{% endif %}
 {% else %}
 <div class="card pc-card" id="monitoring">
   <div class="pc-card-head">

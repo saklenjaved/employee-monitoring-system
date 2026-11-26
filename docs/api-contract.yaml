@@ -203,7 +203,7 @@ paths:
                   # browser once. It is not derived from the API address, which may not be trusted by a browser.
                   dashboard_url: { type: string }
         '400': { $ref: '#/components/responses/Error' }
-        '429': { description: Rate limited. Retry with backoff. }
+        '429': { description: Rate limited (60 requests an hour for each address). Retry with backoff. }
   /pairing/requests/{request_id}/:
     get:
       summary: Poll a pairing request. The credential is returned once, with status approved.
