@@ -23,7 +23,7 @@ from devices.models import Device, MonitoringStart
 from devices.services import sync_state, sync_status
 from devices.start import STATUS_ACTIVE, STATUS_PAUSED, monitoring_statuses
 from monitoring.models import EventType, MonitoringEvent
-from monitoring.services import timezone_for
+from monitoring.services import report_zone
 from organizations.models import Organization
 from productivity.models import UNCLASSIFIED, Category, ItemType
 from productivity.services import Classifier, create_rule
@@ -364,8 +364,8 @@ def daily_trend(organization, employee_ids, start_date, end_date):
         idle_seconds[row["date"]] = row["idle"] or 0
     return {
         "labels": [day.isoformat() for day in days],
-        "series": {key: [round(seconds[day][key] / 3600, 2) for day in days] for key in CATEGORY_KEYS},
-        "idle_hours": [round(idle_seconds.get(day, 0) / 3600, 2) for day in days],
+        "series": {key: [round(seconds[day][key] / 3600, 6) for day in days] for key in CATEGORY_KEYS},
+        "idle_hours": [round(idle_seconds.get(day, 0) / 3600, 6) for day in days],
         "activity_percent": [activity.get(day) for day in days],
     }
 
@@ -392,19 +392,35 @@ LIVE_ROW_LIMIT = 200  # employees shown in the live table; the rest are on the P
 RECENT_ACTIVITY_LIMIT = 20  # application samples in the "recent activity" feed on an employee's page
 
 
-def recent_activity(employee, limit=RECENT_ACTIVITY_LIMIT):
-    """The employee's latest application samples, newest first. Each has the active or idle state sampled with it.
+TIMELINE_LIMIT = 200  # application changes shown in one employee's timeline
 
-    The times are in the organization's time zone. The caller has already checked that the viewer may see this employee.
-    """
-    zone = timezone_for(employee.organization)
-    events = list(
-        MonitoringEvent.objects.filter(
-            organization=employee.organization,
-            user=employee,
-            event_type__in=[EventType.APP_FOCUS, EventType.ACTIVITY_SAMPLE],
-        ).order_by("-captured_at", "-id")[: limit * 3]
+
+def display_zone():
+    """The zone for the times on pages and for the days in the reports (Indian Standard Time)."""
+    return report_zone()
+
+
+def local_day_bounds(start_date, end_date, zone):
+    """The first instant of start_date and the first instant after end_date, both in `zone`."""
+    start = datetime.combine(start_date, time.min, tzinfo=zone)
+    end = datetime.combine(end_date + timedelta(days=1), time.min, tzinfo=zone)
+    return start, end
+
+
+def _employee_events(employee, start=None, end=None):
+    """The employee's application and activity samples, newest first, optionally between two instants."""
+    events = MonitoringEvent.objects.filter(
+        organization=employee.organization,
+        user=employee,
+        event_type__in=[EventType.APP_FOCUS, EventType.ACTIVITY_SAMPLE],
     )
+    if start is not None:
+        events = events.filter(captured_at__gte=start, captured_at__lt=end)
+    return events.order_by("-captured_at", "-id")
+
+
+def _focus_rows(events, zone, limit):
+    """Application changes, newest first, each with the active or idle state sampled at the same time."""
     state_at = {e.captured_at: e.payload.get("state", "") for e in events if e.event_type == EventType.ACTIVITY_SAMPLE}
     rows = [
         {
@@ -417,6 +433,52 @@ def recent_activity(employee, limit=RECENT_ACTIVITY_LIMIT):
         if e.event_type == EventType.APP_FOCUS
     ]
     return rows[:limit]
+
+
+def recent_activity(employee, limit=RECENT_ACTIVITY_LIMIT):
+    """The employee's latest application samples, newest first. Each has the active or idle state sampled with it.
+
+    The times are in the organization's time zone. The caller has already checked that the viewer may see this employee.
+    """
+    zone = report_zone()
+    events = list(_employee_events(employee)[: limit * 3])
+    return _focus_rows(events, zone, limit)
+
+
+def activity_timeline(employee, start_date, end_date, limit=TIMELINE_LIMIT):
+    """The employee's application changes between two dates (inclusive), newest first, in display time.
+
+    The caller has already checked that the viewer may see this employee.
+    """
+    zone = display_zone()
+    start, end = local_day_bounds(start_date, end_date, zone)
+    events = list(_employee_events(employee, start, end)[: limit * 3])
+    return _focus_rows(events, zone, limit)
+
+
+def attendance_by_day(employee, start_date, end_date):
+    """For each day with activity between two dates: the first and last time the agent recorded activity.
+
+    This is taken from monitoring data only. It is not an HR attendance record.
+    """
+    zone = display_zone()
+    start, end = local_day_bounds(start_date, end_date, zone)
+    days = {}
+    times = _employee_events(employee, start, end).values_list("captured_at", flat=True)
+    for captured_at in times:
+        local = captured_at.astimezone(zone)
+        day = days.setdefault(local.date(), {"day": local.date(), "first": local, "last": local, "entries": 0})
+        day["first"] = min(day["first"], local)
+        day["last"] = max(day["last"], local)
+        day["entries"] += 1
+    rows = [days[day] for day in sorted(days)]
+    for row in rows:
+        # Position of the working span on a 24-hour bar, in percent (used by the attendance chart).
+        first_minute = row["first"].hour * 60 + row["first"].minute
+        last_minute = row["last"].hour * 60 + row["last"].minute
+        row["first_pct"] = round(first_minute / 1440 * 100, 2)
+        row["width_pct"] = max(round((last_minute - first_minute) / 1440 * 100, 2), 0.5)
+    return rows
 
 
 def employee_live(employee, now=None):
@@ -474,7 +536,7 @@ def live_activity(viewer, limit=LIVE_ACTIVITY_LIMIT):
     if viewer.role != Role.ADMIN:
         return []
     organization = viewer.organization
-    zone = timezone_for(organization)
+    zone = report_zone()
     ids = visible_employees(viewer).values_list("pk", flat=True)
     events = (
         MonitoringEvent.objects.filter(
@@ -504,7 +566,7 @@ def live_status(viewer):
     if viewer.role != Role.ADMIN:
         return None
     organization = viewer.organization
-    today = timezone.now().astimezone(timezone_for(organization)).date()
+    today = timezone.now().astimezone(report_zone()).date()
     ids = list(visible_employees(viewer).values_list("pk", flat=True))
     today_activity = ActivityDaily.objects.filter(organization=organization, user_id__in=ids, date=today).aggregate(
         active=Sum("active_seconds"), idle=Sum("idle_seconds"), people=Count("user_id", distinct=True)
@@ -652,9 +714,9 @@ def unclassified_items(organization, days=30, limit=UNCLASSIFIED_DEFAULT_LIMIT):
     employee's teams. Returns up to `limit` of {"item_type", "name", "seconds", "employees"}, busiest
     first. Only the busiest UNCLASSIFIED_ROW_LIMIT employee-and-item rows are looked at.
     """
-    today = timezone.now().astimezone(timezone_for(organization)).date()
+    today = timezone.now().astimezone(report_zone()).date()
     rows = list(
-        ItemUsageDaily.objects.filter(organization=organization, date__gte=today - timedelta(days=days))
+        ItemUsageDaily.objects.filter(organization=organization, date__gte=today - timedelta(days=days - 1))
         .values("user_id", "item_type", "name")
         .annotate(total=Sum("seconds"))
         .order_by("-total")[:UNCLASSIFIED_ROW_LIMIT]
@@ -707,7 +769,7 @@ ACTIVITY_FEED = {
 }
 ACTIVITY_STATUS_LABELS = {"success": "Done", "pending": "Waiting", "warning": "Attention", "active": "Active", "info": "Updated"}
 RECENT_ACTIVITY_PER_PAGE = 5
-DISPLAY_ZONE = ZoneInfo(settings.DISPLAY_TIMEZONE)
+DISPLAY_ZONE = report_zone()
 RECENT_SCREENSHOT_LIMIT = 5
 
 
@@ -789,7 +851,7 @@ def command_center(viewer, start_date, end_date=None, activity_page=1):
         return None
     end_date = end_date or start_date
     organization = viewer.organization
-    zone = timezone_for(organization)
+    zone = report_zone()
     now = timezone.now()
     cutoff = now - timedelta(seconds=settings.DEVICE_ONLINE_SECONDS)
     day_start = datetime.combine(start_date, time.min, tzinfo=zone)

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}{{ person.full_name }}{% endblock %}
-{% block crumbs %}<a href="{% url 'person_list' %}">Employees</a><span class="sep">/</span>{{ person.full_name }}{% endblock %}
+{% block crumbs %}{% if monitoring_back %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'dashboard_employees' %}">Employees</a><span class="sep">/</span><a href="{{ monitoring_back }}">{{ person.full_name }}</a><span class="sep">/</span>Profile{% else %}<a href="{% url 'person_list' %}">Employees</a><span class="sep">/</span>{{ person.full_name }}{% endif %}{% endblock %}
 {% block content %}
 <div class="card">
   <h1>{{ person.full_name }}</h1>

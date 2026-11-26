@@ -13,9 +13,15 @@ from accounts.models import MembershipStatus, Role, User
 from accounts.services import create_organization_admin, platform_admins, resend_invite
 from common.listing import Column, Filter, build_listing
 
-from .forms import AdminAccountForm, OrganizationForm
+from .forms import AdminAccountForm, AdminEditForm, OrganizationForm
 from .models import Organization
-from .services import create_organization, set_organization_active, set_organization_admin_active
+from .services import (
+    create_organization,
+    delete_organization_admin,
+    set_organization_active,
+    set_organization_admin_active,
+    update_organization_admin,
+)
 
 
 ADMIN_COLUMNS = (
@@ -149,4 +155,35 @@ def organization_admin_set_active(request, pk):
         messages.success(request, f"Admin {user.email} {state}.")
     if request.POST.get("next") == "organization" and user.organization_id:
         return redirect("organization_detail", pk=user.organization_id)
+    return redirect("admin_list")
+
+
+@role_required(Role.SUPER_ADMIN)
+def organization_admin_edit(request, pk):
+    """Super Admin: an Admin's name and email, pre-filled from the account."""
+    admin = get_object_or_404(platform_admins(request.user), pk=pk)
+    form = AdminEditForm(admin, request.POST or None, initial={"email": admin.email, "full_name": admin.full_name})
+    if request.method == "POST" and form.is_valid():
+        try:
+            update_organization_admin(request.user, admin, form.cleaned_data["email"], form.cleaned_data["full_name"])
+        except ValueError as error:
+            messages.error(request, str(error))
+        else:
+            messages.success(request, f"Admin {admin.email} was updated.")
+            return redirect("admin_list")
+    return render(request, "organizations/admin_edit.html", {"admin": admin, "form": form})
+
+
+@role_required(Role.SUPER_ADMIN)
+@require_POST
+def organization_admin_delete(request, pk):
+    """Super Admin: permanently delete an Admin's account. The organization and its employees are kept."""
+    admin = get_object_or_404(platform_admins(request.user), pk=pk)
+    email = admin.email
+    try:
+        delete_organization_admin(request.user, admin)
+    except ValueError as error:
+        messages.error(request, str(error))
+    else:
+        messages.success(request, f"Admin {email} was deleted. The organization and its employees were kept.")
     return redirect("admin_list")

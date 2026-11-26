@@ -39,6 +39,9 @@ class ScreenshotTimezoneTests(TestCase):
         self.assertContains(response, "23 Nov 2026, 14:30 IST")
 
     def test_profile_recent_screenshots_show_organization_zone(self):
-        response = self.client.get(reverse("dashboard_employee", args=[self.employee.pk]))
+        # The employee page shows the screenshots of the chosen dates, so pick the day of this screenshot.
+        response = self.client.get(
+            reverse("dashboard_employee", args=[self.employee.pk]), {"start": "2026-11-23", "end": "2026-11-23"}
+        )
         self.assertContains(response, "23 Nov 2026, 14:30:00 IST")
         self.assertNotContains(response, "23 Nov 2026, 09:00:00")

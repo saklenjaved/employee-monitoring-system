@@ -8,6 +8,7 @@ import csv
 from urllib.parse import urlencode
 from datetime import timedelta
 
+from django.db.models import Q
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.utils import timezone
@@ -17,7 +18,7 @@ from audit.services import record_event
 from accounts.models import Role
 from monitoring.models import MonitoringPolicy
 from screenshots.models import ScreenshotPolicy
-from monitoring.services import get_policy, timezone_for, zone_context
+from monitoring.services import get_policy, report_zone, zone_context
 from accounts.pin import has_pin
 from devices.pairing import awaiting_first_contact, open_window_for, waiting_pcs_for
 from devices.services import connection_state, sync_status
@@ -28,6 +29,10 @@ from workforce.services import visible_employees, visible_teams
 from .forms import DateRangeForm
 from .services import (
     MONITORING_GROUPS,
+    activity_timeline,
+    attendance_by_day,
+    display_zone,
+    local_day_bounds,
     employees_in_group,
     command_center,
     daily_trend,
@@ -61,7 +66,7 @@ HOME_BY_ROLE = {
 
 def _today_for(organization):
     """Today's date in the organization's time zone."""
-    return timezone.now().astimezone(timezone_for(organization)).date()
+    return timezone.now().astimezone(report_zone()).date()
 
 
 # Quick ranges: how many days before today the range starts. "day" is today only; "week" is the last 7 days.
@@ -153,12 +158,15 @@ def employee_dashboard(request, pk):
 
     def context(start, end):
         can_view = can_view_screenshots(request.user)
-        # Only this employee's screenshots, and only those the viewer may see (checked by visible_screenshots).
-        shots = (
-            visible_screenshots(request.user).filter(user=employee).order_by("-captured_at")[:RECENT_SCREENSHOTS]
-            if can_view
-            else []
-        )
+        # Only this employee's screenshots in the chosen dates, and only those the viewer may see.
+        shots, shot_total = [], 0
+        if can_view:
+            from_time, until_time = local_day_bounds(start, end, display_zone())
+            in_range = visible_screenshots(request.user).filter(
+                user=employee, captured_at__gte=from_time, captured_at__lt=until_time
+            )
+            shot_total = in_range.count()
+            shots = list(in_range.order_by("-captured_at")[:RECENT_SCREENSHOTS])
         return {
             "employee": employee,
             "report": usage_for(request.user, employee, start, end),
@@ -167,10 +175,23 @@ def employee_dashboard(request, pk):
             "monitoring_window": _monitoring_window(request.user.organization),
             "can_view_screenshots": can_view,
             "screenshots": shots,
+            "screenshot_total": shot_total,
+            "timeline": activity_timeline(employee, start, end),
+            "attendance": attendance_by_day(employee, start, end),
             **zone_context(request.user.organization),
         }
 
     return _page(request, "analytics/employee.html", request.user.organization, context)
+
+
+@role_required(Role.ADMIN, Role.MANAGER)
+def employee_index(request):
+    """Find an employee and open their monitoring details. Lists only the employees the viewer may see."""
+    query = request.GET.get("q", "").strip()
+    employees = visible_employees(request.user).order_by("full_name")
+    if query:
+        employees = employees.filter(Q(full_name__icontains=query) | Q(email__icontains=query))
+    return render(request, "analytics/employee_index.html", {"employees": employees[:200], "query": query})
 
 
 @role_required(Role.ADMIN, Role.MANAGER)
@@ -179,7 +200,12 @@ def employee_live_panel(request, pk):
     employee = visible_employees(request.user).filter(pk=pk).first()
     if employee is None:
         raise Http404
-    context = {"employee": employee, "live": employee_live(employee), **zone_context(request.user.organization)}
+    context = {
+        "employee": employee,
+        "live": employee_live(employee),
+        "monitoring_window": _monitoring_window(request.user.organization),
+        **zone_context(request.user.organization),
+    }
     return render(request, "analytics/_employee_live.html", context)
 
 
@@ -314,11 +340,13 @@ def platform_dashboard(request):
 # --- Chart data and live panels (fetched by the pages with HTMX and Chart.js) -------------
 
 
-def _trend_response(request, employee_ids):
-    """JSON for a trend chart. Uses the same date range as the page, widened to two weeks."""
+def _trend_response(request, employee_ids, widen=True):
+    """JSON for a trend chart. Uses the same date range as the page. Team and organization charts widen it
+    to two weeks for context; an employee's chart shows exactly the dates selected on its page."""
     organization = request.user.organization
     start, end, _ = _date_range(request, organization)
-    start, end = trend_range(start, end)
+    if widen:
+        start, end = trend_range(start, end)
     return JsonResponse(daily_trend(organization, employee_ids, start, end))
 
 
@@ -331,7 +359,7 @@ def my_trend(request):
 def employee_trend(request, pk):
     if not visible_employees(request.user).filter(pk=pk).exists():
         raise Http404
-    return _trend_response(request, [pk])
+    return _trend_response(request, [pk], widen=False)
 
 
 @role_required(Role.ADMIN, Role.MANAGER)

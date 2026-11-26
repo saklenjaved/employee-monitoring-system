@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% load analytics_extras tz %}
 {% block title %}{% if own %}My dashboard{% else %}{{ employee.full_name }}{% endif %}{% endblock %}
-{% block crumbs %}{% if not own %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span>{{ employee.full_name }}{% endif %}{% endblock %}
+{% block crumbs %}{% if not own %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'dashboard_employees' %}">Employees</a><span class="sep">/</span>{{ employee.full_name }}{% endif %}{% endblock %}
 {% block content %}
+{% if not own %}{% include "analytics/_employee_admin.html" %}{% else %}
 <style>
   /* Employee dashboard (own view). Account stays compact; the PC connection card gets the main column. */
   .approve-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-bottom: 18px; padding: 14px 18px; border-radius: 12px; background: color-mix(in srgb, #f59e0b 12%, var(--c-surface)); border: 1px solid color-mix(in srgb, #f59e0b 45%, transparent); }
@@ -72,25 +73,6 @@
       <div><dt>Role</dt><dd>{{ user.get_role_display }}</dd></div>
       <div><dt>Account status</dt><dd><span class="status ok">Active</span></dd></div>
     </dl>
-    {% else %}
-    <div class="section-title"><h2>Account</h2></div>
-    <div class="identity">
-      <span class="avatar" aria-hidden="true">{{ employee.email|slice:":1" }}</span>
-      <div><strong>{{ employee.full_name }}</strong><span>{{ employee.email }}</span></div>
-    </div>
-    <dl class="details">
-      <dt>Role</dt><dd>{{ employee.get_role_display }}</dd>
-      <dt>Status</dt><dd>{% if employee.is_active %}Active{% else %}Deactivated{% endif %}</dd>
-    </dl>
-    {% if monitoring_window %}
-    <div class="section-title"><h2>Working hours</h2></div>
-    <dl class="details">
-      <dt>Monitored days</dt><dd>{{ monitoring_window.days }}</dd>
-      <dt>Monitored hours</dt><dd>{{ monitoring_window.start }}&ndash;{{ monitoring_window.end }}</dd>
-      <dt>Time zone</dt><dd>{{ monitoring_window.timezone }}</dd>
-      <dt>Monitoring</dt><dd>{% if monitoring_window.enabled %}On{% else %}Off{% endif %}</dd>
-    </dl>
-    {% endif %}
     {% endif %}
   </div>
   {% if own %}
@@ -103,8 +85,6 @@
     {% endif %}
     {% include "devices/_monitoring_card.html" %}
   </div>
-  {% else %}
-  <div>{% include "analytics/_employee_live.html" %}</div>
   {% endif %}
 </div>
 <div class="card">
@@ -116,26 +96,6 @@
   {% include "analytics/_stats_table.html" with stats=report %}
   {% endif %}
 </div>
-
-{% if not own and can_view_screenshots %}
-<div class="card">
-  <div class="section-title"><h2>Recent screenshots</h2><a href="{% url 'screenshot_list' %}?employee={{ employee.pk }}">All screenshots for {{ employee.full_name }}</a></div>
-  <div class="table-wrap">
-    <table class="chart-table">
-      <tr><th>Captured</th><th>Status</th><th></th></tr>
-      {% for shot in screenshots %}
-        <tr>
-          <td>{% timezone zone %}{{ shot.captured_at|date:"j M Y, H:i:s" }}{% endtimezone %} {{ zone_label }}</td>
-          <td>{{ shot.get_status_display }}</td>
-          <td><a href="{% url 'screenshot_detail' shot.pk %}">Open</a></td>
-        </tr>
-      {% empty %}
-        <tr><td colspan="3" class="muted">No screenshots captured for this employee yet.</td></tr>
-      {% endfor %}
-    </table>
-  </div>
-</div>
-{% endif %}
 
 <div class="card">
   <div class="section-title"><h2>Application time per day</h2></div>
@@ -153,4 +113,5 @@
     {% include "analytics/_items.html" with items=report.websites empty="No websites recorded." %}
   </div>
 </div>
+{% endif %}
 {% endblock %}

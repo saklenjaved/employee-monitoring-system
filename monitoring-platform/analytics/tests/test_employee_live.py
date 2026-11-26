@@ -74,20 +74,19 @@ class EmployeeLivePanelTests(TestCase):
         self.assertContains(response, "Live status")
         self.assertContains(response, "Now using")
         self.assertContains(response, "chrome.exe")
-        self.assertContains(response, "Active")
+        self.assertNotContains(response, "Recent activity")  # the live card has no activity list any more
         self.assertContains(response, 'hx-trigger="every 10s"')
 
     def test_the_employee_page_includes_the_live_card_for_the_admin_only(self):
         self.client.force_login(self.admin)
-        self.assertContains(self.client.get(reverse("dashboard_employee", args=[self.emp.pk])), "Recent activity")
+        self.assertContains(self.client.get(reverse("dashboard_employee", args=[self.emp.pk])), "Activity timeline")
         self.client.force_login(self.emp)
-        self.assertNotContains(self.client.get(reverse("dashboard_me")), "Recent activity")
+        self.assertNotContains(self.client.get(reverse("dashboard_me")), "Activity timeline")
 
     def test_a_pc_with_no_data_says_so(self):
         self.client.force_login(self.admin)
         response = self.live(self.other_emp)
         self.assertContains(response, "No PC connected yet.")
-        self.assertContains(response, "No activity received yet.")
 
     def test_another_organizations_employee_is_not_found(self):
         self.client.force_login(self.admin)

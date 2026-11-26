@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Edit Admin{% endblock %}
+{% block crumbs %}<a href="{% url 'admin_list' %}">Admins</a><span class="sep">/</span>Edit Admin{% endblock %}
+{% block content %}
+<div class="card">
+  <h1>Edit Admin</h1>
+  <p class="muted">{{ admin.organization.name }}. Changes take effect at the Admin's next sign-in.</p>
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Save changes</button>
+    <a href="{% url 'admin_list' %}">Cancel</a>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,399 @@
+{% load analytics_extras tz %}
+{# Admin view of one employee. #}
+<style>
+  .emp-admin .emp-card { background: var(--c-surface); border: 1px solid var(--c-border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow-sm); min-width: 0; }
+  .emp-admin .emp-card h2 { font-size: 1rem; margin: 0 0 10px; }
+  .emp-admin .emp-card h3 { font-size: .92rem; margin: 14px 0 6px; }
+  .emp-admin .emp-card > p.muted { margin: -4px 0 10px; font-size: .86em; }
+  .emp-admin .wrap-text { overflow-wrap: anywhere; min-width: 0; }
+
+  /* Header: identity on the left, compact actions on the right. */
+  .emp-admin .emp-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px 14px; padding: 12px 16px; }
+  .emp-admin .emp-ident { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .emp-admin .emp-ident .avatar { flex: none; width: 40px; height: 40px; font-size: 1rem; }
+  .emp-admin .emp-ident h1 { margin: 0; font-size: 1.2rem; line-height: 1.25; overflow-wrap: anywhere; }
+  .emp-admin .emp-ident p { margin: 0; font-size: .86em; overflow-wrap: anywhere; }
+  .emp-admin .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emp-admin .pill { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: .76em; font-weight: 600; background: var(--c-surface-2); border: 1px solid var(--c-border); white-space: nowrap; }
+  .emp-admin .pill::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .emp-admin .pill.ok { color: var(--c-success); background: var(--c-success-bg); border-color: transparent; }
+  .emp-admin .pill.bad { color: var(--c-danger); background: var(--c-danger-bg); border-color: transparent; }
+  .emp-admin .pill.wait { color: #b45309; background: #fef3c7; border-color: transparent; }
+  :root[data-theme="dark"] .emp-admin .pill.wait { color: #fbbf24; background: #3a2a0c; }
+  .emp-admin .actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .emp-admin .button, .emp-admin button.small { padding: 5px 11px; font-size: .84em; border-radius: 8px; box-shadow: none; }
+  .emp-admin .button:hover { box-shadow: var(--shadow-sm); }
+  .emp-admin .button.secondary { background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border); }
+  .emp-admin .button.secondary:hover { background: var(--c-surface-2); }
+
+  /* Date range: the project's quick-range pills on the left, the date fields on the right. */
+  .emp-admin .range-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; margin: 12px 0 0; }
+  .emp-admin .range-bar .presets { margin: 0; gap: 6px; }
+  .emp-admin .range-bar .preset { padding: 4px 11px; font-size: .84em; }
+  .emp-admin .range-bar form.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0; }
+  .emp-admin .range-bar form.filters label { font-size: .84em; color: var(--c-muted); }
+  .emp-admin .range-bar form.filters input[type=date] { width: auto; height: 32px; padding: 0 8px; font-size: .86em; }
+  .emp-admin .range-bar form.filters button { height: 32px; padding: 0 12px; font-size: .84em; box-shadow: none; }
+  .emp-admin .range-note { margin: 6px 0 0; font-size: .82em; }
+
+  /* Tabs: the project's pill style, compact. */
+  .emp-admin .tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0 0; }
+  .emp-admin .tabs .preset { font-size: .84em; padding: 4px 12px; cursor: pointer; font-family: inherit; box-shadow: none; }
+  .emp-admin .tabs .preset:hover { transform: none; }
+  .emp-admin .tabs .preset[aria-selected="true"] { background: var(--btn-grad); border-color: transparent; color: #fff; box-shadow: 0 4px 10px rgba(79, 70, 229, .25); }
+  .emp-admin .tab-count { margin-left: 5px; padding: 0 6px; border-radius: 999px; background: color-mix(in srgb, currentColor 14%, transparent); font-size: .85em; }
+  .emp-admin [role="tabpanel"] { margin-top: 12px; animation: emp-fade .2s ease; }
+  .emp-admin [role="tabpanel"][hidden] { display: none; }
+  @keyframes emp-fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  /* Overview: profile, then the trend full width, then two equal cards side by side. */
+  .emp-admin .ov-stack { display: grid; gap: 12px; min-width: 0; }
+  .emp-admin .ov-profile { display: flex; flex-direction: column; gap: 16px; padding: 18px 20px; }
+  .emp-admin .ov-top > * { height: 100%; }
+  .emp-admin .ov-where { padding: 18px 20px; }
+  .emp-admin .ov-id { display: flex; align-items: center; gap: 14px; min-width: 0; }
+  .emp-admin .ov-id .avatar { flex: none; width: 52px; height: 52px; font-size: 1.15em; }
+  .emp-admin .ov-name { display: block; font-size: 1.1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emp-admin .ov-email { display: block; font-size: .9em; overflow-wrap: anywhere; }
+  .emp-admin .ov-fields { flex: 1 1 auto; min-width: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 20px; }
+  .emp-admin .ov-fields dt { color: var(--c-muted); font-size: .78em; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .emp-admin .ov-fields dd { margin: 3px 0 0; font-weight: 600; overflow-wrap: anywhere; min-width: 0; }
+  .emp-admin .ov-full { min-width: 0; }
+  .emp-admin .ov-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; align-items: stretch; }
+  .emp-admin .ov-top { align-items: stretch; }
+  .emp-admin .ov-row > * { margin: 0; min-width: 0; padding: 14px 16px; }
+  .emp-admin .ov-row > .card h2 { font-size: 1rem; margin: 0 0 10px; }
+  /* Live status card (templates/analytics/_employee_live.html) */
+  .emp-admin .live-card { animation: live-in .35s ease; }
+  .emp-admin .live-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .emp-admin .live-head h2 { margin: 0; font-size: 1rem; }
+  .emp-admin .live-chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: .78em; font-weight: 600; white-space: nowrap; background: var(--c-surface-2); color: var(--c-muted); transition: background .4s ease, color .4s ease; }
+  .emp-admin .live-chip.ok { color: var(--c-success); background: var(--c-success-bg); }
+  .emp-admin .live-chip.bad { color: var(--c-danger); background: var(--c-danger-bg); }
+  .emp-admin .live-chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--c-muted); transition: background .4s ease; }
+  .emp-admin .live-chip .dot-online { animation: live-pulse 2.2s ease-in-out infinite; }
+  .emp-admin .live-facts { margin: 0; font-size: .92em; }
+  .emp-admin .live-facts > div { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 10px; padding: 6px 0; border-top: 1px solid var(--c-border); }
+  .emp-admin .live-facts dt { color: var(--c-muted); }
+  .emp-admin .live-facts dd { margin: 0; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+  .emp-admin .live-facts .live-wrap { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .emp-admin .live-state { display: inline-block; padding: 1px 8px; border-radius: 6px; font-size: .9em; background: var(--c-surface-2); color: var(--c-muted); transition: background .4s ease, color .4s ease; }
+  .emp-admin .live-state.ok { color: var(--c-success); background: var(--c-success-bg); }
+  @keyframes live-in { from { opacity: .4; } to { opacity: 1; } }
+  @keyframes live-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c-success) 45%, transparent); } 50% { box-shadow: 0 0 0 4px transparent; } }
+  .emp-admin .legend-grid { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .emp-admin .ov-where .split-bar { margin-bottom: 6px; }
+  @media (max-width: 800px) {
+    .emp-admin .ov-top { grid-template-columns: minmax(0, 1fr); }
+    .emp-admin .ov-fields { grid-template-columns: minmax(0, 1fr); }
+    .emp-admin .ov-row { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* Figures: the project's tiles, kept compact. */
+  .emp-admin .five-up { margin-top: 12px; }
+  .emp-admin .five-up .tiles { gap: 10px; margin: 0; }
+  .emp-admin .five-up .tile { padding: 10px 12px; min-width: 0; overflow-wrap: anywhere; }
+  .emp-admin .five-up .tile-value { font-size: 1.2em; font-variant-numeric: tabular-nums; }
+  .emp-admin .five-up .tile-label { font-size: .8em; }
+
+  /* Layout: two columns on wide screens, one on narrow ones; the grid keeps cards the same height per row. */
+  .emp-admin .split { display: grid; grid-template-columns: minmax(230px, 280px) minmax(0, 1fr); gap: 12px; align-items: start; }
+  .emp-admin .stack { display: grid; gap: 12px; min-width: 0; }
+  .emp-admin .stack > * { min-width: 0; }
+  .emp-admin .pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; align-items: start; }
+  .emp-admin .details { display: block; margin: 0; font-size: .92em; }
+  .emp-admin .details > div { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 6px 0; border-top: 1px solid var(--c-border); }
+  .emp-admin .details dt { color: var(--c-muted); flex: none; }
+  .emp-admin .details dd { margin: 0; font-weight: 600; text-align: right; overflow-wrap: anywhere; min-width: 0; }
+  .emp-admin .split-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--c-surface-2); }
+  .emp-admin .split-bar span { height: 100%; }
+  .emp-admin .legend-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 6px 0; border-top: 1px solid var(--c-border); font-size: .92em; }
+  .emp-admin .dot-cat { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 6px; vertical-align: middle; }
+  .emp-admin .cat-productive { background: #10b981; } .emp-admin .cat-unproductive { background: #ef4444; }
+  .emp-admin .cat-neutral { background: #94a3b8; } .emp-admin .cat-unclassified { background: #f59e0b; }
+
+  /* Screenshots */
+  .emp-admin .toolrow { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; margin-bottom: 10px; }
+  .emp-admin .toolrow h2 { margin: 0; }
+  .emp-admin .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+  .emp-admin .shot { display: block; overflow: hidden; border: 1px solid var(--c-border); border-radius: 10px; background: var(--c-surface); color: var(--c-text); text-decoration: none; transition: transform .2s ease, box-shadow .2s ease; }
+  .emp-admin .shot:hover { transform: translateY(-2px); box-shadow: var(--shadow); text-decoration: none; }
+  .emp-admin .shot-thumb { aspect-ratio: 16 / 9; display: grid; place-items: center; background: linear-gradient(135deg, var(--c-surface-2), var(--c-border)); color: var(--c-muted); }
+  .emp-admin .shot-thumb svg { width: 26px; height: 26px; opacity: .6; }
+  .emp-admin .shot-meta { display: flex; flex-direction: column; gap: 4px; padding: 8px 10px; font-size: .84em; }
+  .emp-admin .shot-meta strong { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+
+  /* Timeline: the project's .chart-table, with long application names kept on one line. */
+  .emp-admin .tl-app { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .emp-admin .toolrow input[type=search] { width: min(260px, 100%); height: 32px; font-size: .86em; }
+
+  /* Attendance */
+  .emp-admin .att-row { display: grid; grid-template-columns: minmax(110px, 1fr) 56px 56px minmax(90px, 2fr) 56px; align-items: center; gap: 10px; padding: 7px 4px; border-top: 1px solid var(--c-border); font-size: .9em; font-variant-numeric: tabular-nums; }
+  .emp-admin .att-head { color: var(--c-muted); font-size: .78em; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; border-top: 0; }
+  .emp-admin .span-track { position: relative; height: 8px; border-radius: 999px; background: var(--c-surface-2); }
+  .emp-admin .span-fill { position: absolute; top: 0; bottom: 0; border-radius: inherit; background: var(--btn-grad); }
+
+  /* Tables and bars inside cards (the shared item lists) */
+  .emp-admin .emp-card table { width: 100%; font-size: .9em; }
+  .emp-admin .emp-card td, .emp-admin .emp-card th { padding: 7px 6px; overflow-wrap: anywhere; }
+  .emp-admin .emp-card .bar { display: inline-block; width: 70px; height: 6px; margin-right: 6px; vertical-align: middle; border-radius: 999px; background: var(--c-surface-2); overflow: hidden; }
+  .emp-admin .emp-card .bar > span { display: block; height: 100%; background: var(--btn-grad); }
+
+  @media (max-width: 1000px) { .emp-admin .split { grid-template-columns: minmax(220px, 260px) minmax(0, 1fr); } }
+  @media (max-width: 800px) {
+    .emp-admin .split { grid-template-columns: minmax(0, 1fr); }
+    .emp-admin .five-up .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  }
+  @media (max-width: 560px) {
+    .emp-admin .five-up .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .emp-admin .range-bar form.filters { width: 100%; }
+    .emp-admin .range-bar form.filters input[type=date] { flex: 1 1 120px; }
+    .emp-admin .tl li { grid-template-columns: minmax(0, 1fr) auto; }
+    .emp-admin .tl time { grid-column: 1 / -1; order: -1; }
+    .emp-admin .att-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .emp-admin .att-row .span-track { grid-column: 1 / -1; order: 3; }
+    .emp-admin .att-head { display: none; }
+    .emp-admin .gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (prefers-reduced-motion: reduce) { .emp-admin *, .emp-admin *::before { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="emp-admin">
+  <header class="emp-card emp-head">
+    <div class="emp-ident">
+      <span class="avatar" aria-hidden="true">{{ employee.email|slice:":1"|upper }}</span>
+      <div>
+        <h1>{{ employee.full_name|default:employee.email }}</h1>
+        <p class="muted">{{ employee.email }} &middot; {{ employee.get_role_display }}</p>
+      </div>
+    </div>
+    <div class="pills">
+      {% if live.agent.state == "up_to_date" or live.agent.state == "uploading" %}<span class="pill ok">PC online</span>
+      {% elif live.agent.state == "offline" %}<span class="pill bad">PC offline</span>
+      {% else %}<span class="pill wait">No PC connected</span>{% endif %}
+      {% if monitoring_window.enabled %}<span class="pill ok">Monitoring on</span>{% else %}<span class="pill">Monitoring off</span>{% endif %}
+      {% if employee.is_active %}<span class="pill ok">Active</span>{% else %}<span class="pill bad">Deactivated</span>{% endif %}
+    </div>
+    <div class="actions">
+      {% if can_view_screenshots %}<a class="button" href="{% url 'screenshot_list' %}?employee={{ employee.pk }}&amp;start={{ start|date:'Y-m-d' }}&amp;end={{ end|date:'Y-m-d' }}">Screenshots</a>{% endif %}
+      <a class="button secondary" href="{% url 'person_detail' employee.pk %}?from=monitoring&amp;start={{ start|date:'Y-m-d' }}&amp;end={{ end|date:'Y-m-d' }}">Profile</a>
+    </div>
+  </header>
+
+  <div class="range-bar">
+    <nav class="presets" aria-label="Quick ranges">
+      <a href="?preset=day" class="preset{% if preset == 'day' %} active{% endif %}">Today</a>
+      <a href="?preset=week" class="preset{% if preset == 'week' %} active{% endif %}">Last 7 days</a>
+      <a href="?preset=month" class="preset{% if preset == 'month' %} active{% endif %}">Last 30 days</a>
+    </nav>
+    <form method="get" class="filters">
+      {{ form.non_field_errors }}{{ form.start.errors }}{{ form.end.errors }}
+      <label for="emp-start">From</label>
+      <input id="emp-start" type="date" name="start" value="{{ start|date:'Y-m-d' }}">
+      <label for="emp-end">To</label>
+      <input id="emp-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}">
+      <button type="submit">Show</button>
+    </form>
+  </div>
+  <p class="muted range-note">Showing {% if start == end %}{{ start|date:"j M Y" }}{% else %}{{ start|date:"j M Y" }} to {{ end|date:"j M Y" }}{% endif %} ({{ zone_label }}). Each day runs midnight to midnight IST.</p>
+
+  <div class="five-up">
+    <div class="tiles">
+      <div class="tile"><span class="tile-value">{{ report.app_seconds|duration }}</span><span class="tile-label">Application time</span></div>
+      <div class="tile"><span class="tile-value">{{ report.productive_percent|percent }}</span><span class="tile-label">Productive share</span></div>
+      <div class="tile"><span class="tile-value">{{ report.activity_percent|percent }}</span><span class="tile-label">Activity</span></div>
+      <div class="tile"><span class="tile-value">{{ report.active_seconds|duration }}</span><span class="tile-label">Active time</span></div>
+      <div class="tile"><span class="tile-value">{{ report.idle_seconds|duration }}</span><span class="tile-label">Idle time</span></div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Monitoring sections">
+    <button class="preset" role="tab" type="button" data-tab="overview" id="tab-overview" aria-controls="panel-overview">Overview</button>
+    <button class="preset" role="tab" type="button" data-tab="screenshots" id="tab-screenshots" aria-controls="panel-screenshots">Screenshots <span class="tab-count">{{ screenshot_total }}</span></button>
+    <button class="preset" role="tab" type="button" data-tab="timeline" id="tab-timeline" aria-controls="panel-timeline">Timeline <span class="tab-count">{{ timeline|length }}</span></button>
+    <button class="preset" role="tab" type="button" data-tab="attendance" id="tab-attendance" aria-controls="panel-attendance">Attendance <span class="tab-count">{{ attendance|length }}</span></button>
+    <button class="preset" role="tab" type="button" data-tab="apps" id="tab-apps" aria-controls="panel-apps">Apps &amp; Websites</button>
+  </nav>
+
+  <div role="tabpanel" id="panel-overview" data-panel="overview" aria-labelledby="tab-overview" class="ov-stack">
+    <div class="ov-row ov-top">
+    <section class="emp-card ov-profile" aria-label="Profile">
+      <div class="ov-id">
+        <span class="avatar" aria-hidden="true">{{ employee.email|slice:":1"|upper }}</span>
+        <div class="wrap-text">
+          <strong class="ov-name">{{ employee.full_name|default:employee.email }}</strong>
+          <span class="muted ov-email">{{ employee.email }}</span>
+        </div>
+      </div>
+      <dl class="ov-fields">
+        <div><dt>Name</dt><dd>{{ employee.full_name|default:"—" }}</dd></div>
+        <div><dt>Email</dt><dd>{{ employee.email }}</dd></div>
+        <div><dt>Role</dt><dd>{{ employee.get_role_display }}</dd></div>
+        <div><dt>Account</dt><dd>{% if employee.is_active %}Active{% else %}Deactivated{% endif %}</dd></div>
+      </dl>
+    </section>
+
+    <div class="emp-card ov-where">
+      <h2>Where the time went</h2>
+      {% if report.app_seconds %}
+        <div class="split-bar" role="img" aria-label="Share of application time by category">
+          {% for key, label in categories %}{% with seconds=report.category_seconds|lookup:key %}{% if seconds %}<span class="cat-{{ key }}" style="width: {{ seconds|share:report.app_seconds }}%" title="{{ label }}"></span>{% endif %}{% endwith %}{% endfor %}
+        </div>
+        <div class="legend-grid">
+          {% for key, label in categories %}{% with seconds=report.category_seconds|lookup:key %}
+            <div class="legend-row"><span><span class="dot-cat cat-{{ key }}"></span>{{ label }}</span><span>{{ seconds|duration }} &middot; <strong>{{ seconds|share:report.app_seconds }}%</strong></span></div>
+          {% endwith %}{% endfor %}
+        </div>
+      {% else %}
+        <p class="muted">No application time recorded for these dates.</p>
+      {% endif %}
+    </div>
+    </div>
+
+    <div class="emp-card ov-full">
+      <h2>Application time per day</h2>
+      {% url 'trend_employee' employee.pk as trend_url %}
+      {% include "analytics/_trend.html" with url=trend_url|add:"?"|add:request.GET.urlencode %}
+    </div>
+
+
+    <div class="ov-row">
+      {% if monitoring_window %}
+      <div class="emp-card">
+        <h2>Working hours</h2>
+        <dl class="details">
+          <div><dt>Active time (these dates)</dt><dd>{{ report.active_seconds|duration }}</dd></div>
+          <div><dt>Monitored days</dt><dd>{{ monitoring_window.days }}</dd></div>
+          <div><dt>Monitored hours</dt><dd>{{ monitoring_window.start }}&ndash;{{ monitoring_window.end }}</dd></div>
+          <div><dt>Time zone</dt><dd>{{ monitoring_window.timezone }}</dd></div>
+          <div><dt>Monitoring</dt><dd>{% if monitoring_window.enabled %}On{% else %}Off{% endif %}</dd></div>
+        </dl>
+      </div>
+      {% endif %}
+      {% include "analytics/_employee_live.html" %}
+    </div>
+
+  </div>
+
+  <div role="tabpanel" id="panel-screenshots" data-panel="screenshots" aria-labelledby="tab-screenshots" class="emp-card" hidden>
+    <div class="toolrow">
+      <h2>Screenshots</h2>
+      <p class="muted" style="margin:0">{% if screenshot_total > screenshots|length %}Showing the latest {{ screenshots|length }} of {{ screenshot_total }}.{% else %}{{ screenshot_total }} in these dates.{% endif %}</p>
+    </div>
+    {% if can_view_screenshots %}
+      {% timezone zone %}
+      <div class="gallery">
+        {% for shot in screenshots %}
+          <a class="shot" href="{% url 'screenshot_detail' shot.pk %}">
+            <span class="shot-thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M3 15l5-5 4 4 3-3 6 6"/></svg></span>
+            <span class="shot-meta">
+              <strong>{{ shot.captured_at|date:"j M Y, H:i:s" }} {{ zone_label }}</strong>
+              <span class="badge">{{ shot.get_status_display }}</span>
+            </span>
+          </a>
+        {% empty %}
+          <p class="muted">No screenshots captured for these dates.</p>
+        {% endfor %}
+      </div>
+      {% endtimezone %}
+    {% else %}
+      <p class="muted">Your organization does not let you view screenshots.</p>
+    {% endif %}
+  </div>
+
+  <div role="tabpanel" id="panel-timeline" data-panel="timeline" aria-labelledby="tab-timeline" class="emp-card" hidden>
+    <div class="toolrow">
+      <h2>Activity timeline</h2>
+      <input type="search" id="timeline-filter" placeholder="Filter by application" aria-label="Filter timeline by application">
+    </div>
+    <p class="muted">Application changes, newest first, in {{ zone_label }}. Up to 200 shown.</p>
+    <div class="table-wrap">
+      <table class="chart-table" id="timeline-list">
+        <tr><th>Time</th><th>Application</th><th>Length</th><th>State</th></tr>
+        {% for row in timeline %}
+          <tr data-app="{{ row.app|lower }}">
+            <td>{{ row.time|date:"j M, H:i:s" }}</td>
+            <td class="tl-app" title="{{ row.app }}">{{ row.app|default:"—" }}</td>
+            <td>{{ row.seconds|floatformat:0 }} s</td>
+            <td>{% if row.state == "active" %}<span class="badge state-active">Active</span>{% elif row.state == "idle" %}<span class="badge state-idle">Idle</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+          </tr>
+        {% empty %}
+          <tr><td colspan="4" class="muted">No application changes recorded in these dates.</td></tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+
+  <div role="tabpanel" id="panel-attendance" data-panel="attendance" aria-labelledby="tab-attendance" class="emp-card" hidden>
+    <h2>Attendance</h2>
+    <p class="muted">First and last activity each day, from monitoring data in {{ zone_label }}. Not an HR attendance record.</p>
+    <div class="table-scroll">
+      <div class="att-row att-head"><span>Day</span><span>First</span><span>Last</span><span>Span of the day</span><span>Records</span></div>
+      {% for row in attendance %}
+        <div class="att-row">
+          <span>{{ row.day|date:"D j M Y" }}</span>
+          <span>{{ row.first|date:"H:i" }}</span>
+          <span>{{ row.last|date:"H:i" }}</span>
+          <span class="span-track" aria-hidden="true"><span class="span-fill" style="left: {{ row.first_pct }}%; width: {{ row.width_pct }}%"></span></span>
+          <span>{{ row.entries }}</span>
+        </div>
+      {% empty %}
+        <p class="muted">No activity recorded in these dates.</p>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div role="tabpanel" id="panel-apps" data-panel="apps" aria-labelledby="tab-apps" class="pair" hidden>
+    <div class="emp-card">
+      <h2>Applications</h2>
+      {% include "analytics/_items.html" with items=report.apps empty="No applications recorded." %}
+    </div>
+    <div class="emp-card">
+      <h2>Websites</h2>
+      {% include "analytics/_items.html" with items=report.websites empty="No websites recorded." %}
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    var root = document.querySelector('.emp-admin');
+    if (!root) return;
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[role="tab"]'));
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[role="tabpanel"]'));
+    function show(name) {
+      tabs.forEach(function (tab) {
+        var on = tab.getAttribute('data-tab') === name;
+        tab.setAttribute('aria-selected', on ? 'true' : 'false');
+        tab.tabIndex = on ? 0 : -1;
+      });
+      panels.forEach(function (panel) { panel.hidden = panel.getAttribute('data-panel') !== name; });
+    }
+    tabs.forEach(function (tab) {
+      tab.addEventListener('click', function () {
+        show(tab.getAttribute('data-tab'));
+        history.replaceState(null, '', '#' + tab.getAttribute('data-tab'));
+      });
+      tab.addEventListener('keydown', function (event) {
+        if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+        var index = tabs.indexOf(tab) + (event.key === 'ArrowRight' ? 1 : -1);
+        var next = tabs[(index + tabs.length) % tabs.length];
+        next.focus();
+        next.click();
+      });
+    });
+    var wanted = location.hash.slice(1);
+    var names = tabs.map(function (tab) { return tab.getAttribute('data-tab'); });
+    show(names.indexOf(wanted) >= 0 ? wanted : 'overview');
+
+    var filter = document.getElementById('timeline-filter');
+    if (filter) {
+      filter.addEventListener('input', function () {
+        var text = filter.value.trim().toLowerCase();
+        root.querySelectorAll('#timeline-list tr[data-app]').forEach(function (item) {
+          item.hidden = text !== '' && item.getAttribute('data-app').indexOf(text) === -1;
+        });
+      });
+    }
+  })();
+</script>

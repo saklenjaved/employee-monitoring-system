@@ -32,12 +32,18 @@ def timezone_for(organization):
     return ZoneInfo(name or "UTC")
 
 
-def zone_context(organization):
-    """The zone for showing times on a page: Indian Standard Time (settings.DISPLAY_TIMEZONE), with its short name.
+def report_zone():
+    """The zone that defines a day on every dashboard and in the daily totals: Indian Standard Time.
 
-    Only the display uses this. Daily totals keep using the organization's policy zone (timezone_for).
+    The organization's policy zone still decides monitoring hours on the agent and the server. It no
+    longer decides what counts as a day on the reports, so a day looks the same on every page.
     """
-    zone = ZoneInfo(settings.DISPLAY_TIMEZONE)
+    return ZoneInfo(settings.DISPLAY_TIMEZONE)
+
+
+def zone_context(organization):
+    """The zone for showing times on a page: Indian Standard Time (settings.DISPLAY_TIMEZONE), with its short name."""
+    zone = report_zone()
     return {"zone": zone, "zone_label": timezone.now().astimezone(zone).strftime("%Z")}
 
 

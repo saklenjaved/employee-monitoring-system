@@ -2,6 +2,7 @@
 Admins and Managers, limited by screenshots.services.visible_screenshots. Every look at an image
 and every download is written to the audit log by the service.
 """
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 
 from django.conf import settings
@@ -9,7 +10,8 @@ from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db import IntegrityError
 from django.db.models import OuterRef, Q, Subquery
-from django.http import Http404, HttpResponseRedirect
+from django.http import Http404, HttpResponseRedirect, QueryDict
+from django.urls import reverse
 from django.shortcuts import redirect, render
 from django.views.decorators.cache import never_cache
 from django.views.decorators.http import require_POST
@@ -20,6 +22,7 @@ from devices.models import Device
 from devices.services import agent_policy
 from monitoring.services import zone_context
 from workforce.models import EmployeeProfile, UserTeam
+from workforce.services import visible_employees
 
 from . import services
 from .forms import ExclusionForm, ScreenshotFilterForm, ScreenshotSettingsForm
@@ -114,10 +117,41 @@ def exclusion_remove(request, pk):
     return redirect("screenshot_exclusions")
 
 
+def _context_employee(request):
+    """The employee this list was opened from (?employee=ID), or None.
+
+    Only an employee the viewer may see counts. Anything else falls back to the normal list, so the
+    filters decide what shows and nothing outside the viewer's scope is ever shown.
+    """
+    raw = request.GET.get("employee", "").strip()
+    if not raw.isdigit():
+        return None
+    return visible_employees(request.user).filter(pk=raw).first()
+
+
+def _back_to_monitoring(request, employee):
+    """The link to this employee's monitoring page, keeping the dates the list was opened with."""
+    dates = urlencode({key: request.GET[key] for key in ("start", "end") if request.GET.get(key)})
+    return reverse("dashboard_employee", args=[employee.pk]) + (f"?{dates}" if dates else "")
+
+
 @role_required(Role.ADMIN, Role.MANAGER)
 def screenshot_list(request):
     viewer = request.user
-    form = ScreenshotFilterForm(viewer, request.GET or None)
+    context_employee = _context_employee(request)
+    back_url = _back_to_monitoring(request, context_employee) if context_employee else ""
+    if context_employee:
+        # An employee's own page: only the dates and the sort order come from the URL. The employee is
+        # fixed here, so no other filter can widen the list.
+        params = QueryDict(mutable=True)
+        for key in ("start", "end", "order"):
+            if request.GET.get(key):
+                params[key] = request.GET[key]
+        params["employee"] = str(context_employee.pk)
+    else:
+        params = request.GET
+    list_url = reverse("screenshot_list") + (f"?employee={context_employee.pk}" if context_employee else "")
+    form = ScreenshotFilterForm(viewer, params or None)
     record = EmployeeProfile.objects.filter(user=OuterRef("user_id"), organization=viewer.organization)
     shots = services.visible_screenshots(viewer).annotate(
         employee_code=Subquery(record.values("employee_code")[:1]),
@@ -142,7 +176,9 @@ def screenshot_list(request):
         if data["start"]:
             start, end = services.day_range(viewer.organization, data["start"], data["end"])
             shots = shots.filter(captured_at__gte=start, captured_at__lt=end)
-    oldest_first = request.GET.get("order") == "oldest"
+    if context_employee:
+        shots = shots.filter(user=context_employee)  # enforced in the query, not only in the form
+    oldest_first = params.get("order") == "oldest"
     shots = shots.order_by("captured_at", "id") if oldest_first else shots.order_by("-captured_at", "-id")
     page = Paginator(shots, PAGE_SIZE).get_page(request.GET.get("page"))
     return render(
@@ -152,17 +188,22 @@ def screenshot_list(request):
             "form": form,
             "page": page,
             "statuses": ScreenshotStatus,
-            "query": _query_without_page(request),
+            "query": _query_without(params),
+            "list_url": list_url,
+            "employee_scope": context_employee,
             "can_download": services.can_download(viewer),
             "shown_from": page.start_index() if page.paginator.count else 0,
             "shown_to": page.end_index() if page.paginator.count else 0,
+            "context_employee": context_employee,
+            "nav_current": "dashboard_employee" if context_employee else "",
+            "back_url": back_url,
             **zone_context(viewer.organization),
         },
     )
 
 
-def _query_without_page(request):
-    query = request.GET.copy()
+def _query_without(params):
+    query = params.copy()
     query.pop("page", None)
     return query.urlencode()
 

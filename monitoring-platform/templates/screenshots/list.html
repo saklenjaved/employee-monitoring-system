@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% load static tz %}
 {% block title %}Screenshots{% endblock %}
+{% block crumbs %}{% if context_employee %}<a href="{% url 'dashboard' %}">Dashboard</a><span class="sep">/</span><a href="{% url 'dashboard_employees' %}">Employees</a><span class="sep">/</span><a href="{{ back_url }}">{{ context_employee.full_name|default:context_employee.email }}</a><span class="sep">/</span>Screenshots{% endif %}{% endblock %}
 {% block content %}
 <style>
   .gal-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin: 4px 0 18px; }
@@ -79,17 +80,23 @@
 
 <div class="gal-head">
   <div>
+    {% if employee_scope %}
+    <h1>{{ employee_scope.full_name|default:employee_scope.email }}</h1>
+    <p class="muted">Screenshots from this employee's PC only. Every image you open is recorded in the audit log.</p>
+    {% else %}
     <h1>Screenshots</h1>
     <p class="muted">Captured screenshots from employee PCs. Every image you open is recorded in the audit log.</p>
+    {% endif %}
   </div>
 </div>
 
 <div class="card">
-  <form method="get" action="{% url 'screenshot_list' %}" class="gal-filters" id="gallery-filters"
-        hx-get="{% url 'screenshot_list' %}"
+  <form method="get" action="{{ list_url }}" class="gal-filters" id="gallery-filters"
+        hx-get="{{ list_url }}"
         hx-trigger="change, submit, input changed delay:350ms from:#shot-q"
         hx-target="#gallery-wrap" hx-select="#gallery-wrap" hx-swap="outerHTML"
         hx-push-url="true" hx-indicator="#gallery-wrap">
+    {% if employee_scope %}<input type="hidden" name="employee" value="{{ employee_scope.pk }}">{% else %}
     <div class="field-wide">
       <label for="shot-q">Search employee</label>
       <input type="search" id="shot-q" name="q" value="{{ form.q.value|default:'' }}" placeholder="Name, email or employee ID" autocomplete="off">
@@ -110,6 +117,7 @@
       <label for="{{ form.status.id_for_label }}">Status</label>
       {{ form.status }}
     </div>
+    {% endif %}
     <div>
       <label for="{{ form.start.id_for_label }}">From</label>
       {{ form.start }}
@@ -124,7 +132,7 @@
     </div>
     <div class="gal-actions">
       <button type="submit">Apply</button>
-      <a href="{% url 'screenshot_list' %}">Reset filters</a>
+      <a href="{{ list_url }}">Reset filters</a>
     </div>
   </form>
   {{ form.non_field_errors }}{{ form.start.errors }}{{ form.end.errors }}
@@ -197,11 +205,11 @@
         {% if query %}
           <h2>No screenshots match these filters</h2>
           <p class="muted">Try another name, a wider date range, or a different status.</p>
-          <a class="button secondary" href="{% url 'screenshot_list' %}">Reset filters</a>
+          <a class="button secondary" href="{{ list_url }}">Reset filters</a>
         {% else %}
           <h2>No screenshots yet</h2>
           <p class="muted">Screenshots appear here after an employee PC with screenshots turned on uploads them.</p>
-          {% if user.role == "admin" %}<a class="button secondary" href="{% url 'screenshot_settings' %}">Open screenshot settings</a>{% endif %}
+          {% if user.role == "admin" and not employee_scope %}<a class="button secondary" href="{% url 'screenshot_settings' %}">Open screenshot settings</a>{% endif %}
         {% endif %}
       </div>
     {% endif %}

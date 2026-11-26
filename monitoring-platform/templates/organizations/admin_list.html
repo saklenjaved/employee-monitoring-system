@@ -1,6 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Admins{% endblock %}
 {% block content %}
+<style>
+  .row-menu { position: relative; display: inline-block; }
+  .row-menu > summary { list-style: none; cursor: pointer; padding: 2px 10px; border-radius: 6px; font-size: 1.2em; line-height: 1; user-select: none; }
+  .row-menu > summary::-webkit-details-marker { display: none; }
+  .row-menu > summary:hover, .row-menu[open] > summary { background: #eef2f7; }
+  .row-menu-list { position: absolute; right: 0; top: 100%; z-index: 20; min-width: 160px; display: flex; flex-direction: column; background: #fff; border: 1px solid #d9dee7; border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; }
+  .row-menu-list a, .row-menu-list button { display: block; width: 100%; text-align: left; background: none; color: inherit; border: 0; padding: 8px 10px; border-radius: 6px; font: inherit; cursor: pointer; text-decoration: none; }
+  .row-menu-list a:hover, .row-menu-list button:hover { background: #f1f4f8; }
+  .row-menu-list form { margin: 0; }
+  .row-menu-list .danger-text { color: #b42318; }
+</style>
 <div class="card">
   <h1>Admins</h1>
   <p class="muted">Every Admin account across all organizations. Find an Admin by name, email or organization.</p>
@@ -31,23 +42,35 @@
               <button type="submit" class="secondary">Resend invitation</button>
             </form>
           {% endif %}
-          {% if admin.admin_status != "pending" %}
-            {% if admin.is_active %}
-              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form"
-                    data-confirm="Deactivate {{ admin.email }} as Admin of {{ admin.organization.name }}? They cannot sign in until reactivated."
-                    data-confirm-label="Deactivate" data-confirm-danger>
+          <details class="row-menu">
+            <summary aria-label="Actions for {{ admin.email }}" title="Actions">&#8942;</summary>
+            <div class="row-menu-list" role="menu">
+              <a role="menuitem" href="{% url 'organization_admin_edit' admin.pk %}">Edit</a>
+              {% if admin.admin_status != "pending" %}
+                {% if admin.is_active %}
+                  <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}"
+                        data-confirm="Deactivate {{ admin.email }} as Admin of {{ admin.organization.name }}? They cannot sign in until reactivated."
+                        data-confirm-label="Deactivate" data-confirm-danger>
+                    {% csrf_token %}
+                    <input type="hidden" name="active" value="0">
+                    <button type="submit" role="menuitem">Deactivate</button>
+                  </form>
+                {% else %}
+                  <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}">
+                    {% csrf_token %}
+                    <input type="hidden" name="active" value="1">
+                    <button type="submit" role="menuitem">Activate</button>
+                  </form>
+                {% endif %}
+              {% endif %}
+              <form method="post" action="{% url 'organization_admin_delete' admin.pk %}"
+                    data-confirm="Permanently delete {{ admin.email }} as Admin of {{ admin.organization.name }}? Their account is removed. The organization and its employees are kept."
+                    data-confirm-label="Delete" data-confirm-danger>
                 {% csrf_token %}
-                <input type="hidden" name="active" value="0">
-                <button type="submit" class="danger">Deactivate</button>
+                <button type="submit" role="menuitem" class="danger-text">Delete</button>
               </form>
-            {% else %}
-              <form method="post" action="{% url 'organization_admin_set_active' admin.pk %}" class="inline-form">
-                {% csrf_token %}
-                <input type="hidden" name="active" value="1">
-                <button type="submit">Activate</button>
-              </form>
-            {% endif %}
-          {% endif %}
+            </div>
+          </details>
         </td>
       </tr>
     {% empty %}

@@ -17,15 +17,14 @@ is cut at midnight.
 """
 from collections import defaultdict
 from datetime import datetime, time, timedelta, timezone as dt_timezone
-from zoneinfo import ZoneInfo
 
 from django.db import transaction
 from django.db.models.functions import TruncHour
 from django.utils import timezone
 
 from accounts.models import User
-from monitoring.models import EventType, MonitoringEvent, MonitoringPolicy
-from monitoring.services import get_policy
+from monitoring.models import EventType, MonitoringEvent
+from monitoring.services import report_zone
 from monitoring.validation import MAX_DURATION_SECONDS
 from productivity.models import ItemType
 
@@ -152,7 +151,7 @@ def compute_day(events, day_start, day_end):
 
 def rebuild_day(user, day):
     """Recalculate one employee's totals for one local day. Safe to run again at any time."""
-    tz = ZoneInfo(get_policy(user.organization).timezone)
+    tz = report_zone()
     day_start, day_end = day_bounds(tz, day)
     items, active_seconds, idle_seconds = compute_day(_events_for(user, day_start, day_end), day_start, day_end)
     items = _busiest(items)
@@ -191,14 +190,9 @@ def rebuild_recent(since_hours=72):
     )
     users = User.objects.filter(pk__in={user_id for user_id, _ in recent}).select_related("organization")
     users = {user.pk: user for user in users}
-    zone_names = dict(
-        MonitoringPolicy.objects.filter(organization_id__in={u.organization_id for u in users.values()}).values_list(
-            "organization_id", "timezone"
-        )
-    )
+    tz = report_zone()
     wanted = set()
     for user_id, hour in recent:
-        tz = ZoneInfo(zone_names.get(users[user_id].organization_id, "UTC"))
         # An event in this hour changes its own day. It may also cover time before midnight, so the
         # day before it can change too. Local midnight can fall inside the hour, so check both ends.
         for moment in (hour, hour + timedelta(minutes=59, seconds=59)):

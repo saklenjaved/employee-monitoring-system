@@ -11,4 +11,6 @@ urlpatterns = [
     path("admins/", views.admin_list, name="admin_list"),
     path("admins/<int:pk>/resend-invite/", views.organization_admin_resend_invite, name="organization_admin_resend_invite"),
     path("admins/<int:pk>/active/", views.organization_admin_set_active, name="organization_admin_set_active"),
+    path("admins/<int:pk>/edit/", views.organization_admin_edit, name="organization_admin_edit"),
+    path("admins/<int:pk>/delete/", views.organization_admin_delete, name="organization_admin_delete"),
 ]

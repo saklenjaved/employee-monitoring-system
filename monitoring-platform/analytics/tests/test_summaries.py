@@ -2,7 +2,7 @@ from datetime import date, timedelta
 from io import StringIO
 
 from django.core.management import call_command
-from django.test import TestCase
+from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from accounts.models import Role
@@ -210,6 +210,7 @@ class RebuildRecentTests(TestCase):
         self.assertEqual(rebuild_recent(since_hours=72), 0)
         self.assertFalse(ItemUsageDaily.objects.exists())
 
+    @override_settings(DISPLAY_TIMEZONE="UTC")  # these tests check midnight, so the day is UTC here
     def test_events_just_after_midnight_also_rebuild_the_previous_day(self):
         pc = make_device(self.user)
         app(pc, at(0, 0, 20, day=2), "chrome.exe", seconds=30)  # covers 23:59:50 - 00:00:20
@@ -217,12 +218,20 @@ class RebuildRecentTests(TestCase):
         self.assertEqual(usage(self.user, date(2026, 11, 1)), {("app", "chrome.exe"): 10})
         self.assertEqual(usage(self.user, date(2026, 11, 2)), {("app", "chrome.exe"): 20})
 
+    @override_settings(DISPLAY_TIMEZONE="UTC")
     def test_a_long_sample_after_midnight_gives_time_to_the_day_before(self):
         pc = make_device(self.user)
         app(pc, at(0, 30, 0, day=2), "chrome.exe", seconds=3600)  # covers 23:30 - 00:30
         rebuild_recent(since_hours=1)
         self.assertEqual(usage(self.user, date(2026, 11, 1)), {("app", "chrome.exe"): 1800})
         self.assertEqual(usage(self.user, date(2026, 11, 2)), {("app", "chrome.exe"): 1800})
+
+    def test_days_follow_indian_standard_time(self):
+        pc = make_device(self.user)
+        app(pc, at(18, 31, 0, day=1), "chrome.exe", seconds=30)  # 00:00:30 to 00:01:00 IST on 2 Nov
+        rebuild_recent(since_hours=1)
+        self.assertEqual(usage(self.user, date(2026, 11, 2)), {("app", "chrome.exe"): 30})
+        self.assertEqual(usage(self.user, date(2026, 11, 1)), {})
 
     def test_rebuild_recent_loads_all_employees_in_one_query(self):
         from django.db import connection

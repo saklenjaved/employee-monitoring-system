@@ -3,9 +3,12 @@
 Only an Admin may use them, and every lookup is limited to the Admin's own
 organization, so another organization's record is simply "not found".
 """
+from urllib.parse import urlencode
+
 from django.contrib import messages
 from django.db import IntegrityError
 from django.http import Http404
+from django.urls import reverse
 from django.shortcuts import redirect, render
 from django.views.decorators.http import require_POST
 
@@ -223,8 +226,18 @@ def person_detail(request, pk):
     return render(
         request,
         "workforce/person_detail.html",
-        {"person": person, "form": form, "devices": devices, "teams": teams, **_setup_context(person)},
+        {"person": person, "form": form, "devices": devices, "teams": teams, **_setup_context(person),
+         "monitoring_back": _monitoring_back(request, person),
+         "nav_current": "dashboard_employee" if _monitoring_back(request, person) else ""},
     )
+
+
+def _monitoring_back(request, person):
+    """When the profile was opened from an employee's monitoring page (?from=monitoring), the link back to it."""
+    if request.GET.get("from") != "monitoring" or person.role != Role.EMPLOYEE:
+        return ""
+    dates = urlencode({key: request.GET[key] for key in ("start", "end") if request.GET.get(key)})
+    return reverse("dashboard_employee", args=[person.pk]) + (f"?{dates}" if dates else "")
 
 
 def _setup_context(person):

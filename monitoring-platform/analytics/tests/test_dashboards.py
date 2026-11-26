@@ -311,13 +311,13 @@ class DateRangeTests(DashboardTestCase):
                 self.assertTrue(page.context["form"].errors)
                 self.assertEqual(page.context["report"]["app_seconds"], 0)
 
-    def test_today_follows_the_organization_time_zone(self):
+    def test_today_is_the_indian_calendar_day_whatever_the_policy_zone(self):
         from analytics.dashboards import _today_for
 
         late_evening_utc = datetime(2026, 11, 2, 20, 0, tzinfo=timezone.utc)  # already 3 Nov in India
         with mock.patch("analytics.dashboards.timezone.now", return_value=late_evening_utc):
-            self.assertEqual(_today_for(self.org_a), date(2026, 11, 2))  # no policy yet: UTC
-            update_policy(self.admin_a, self.org_a, {"timezone": "Asia/Kolkata"})
+            self.assertEqual(_today_for(self.org_a), date(2026, 11, 3))
+            update_policy(self.admin_a, self.org_a, {"timezone": "America/New_York"})
             self.assertEqual(_today_for(self.org_a), date(2026, 11, 3))
 
     def test_the_page_opens_on_today(self):

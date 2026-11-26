@@ -163,15 +163,18 @@ class UnclassifiedRulesTests(TestCase):
         )
         self.assertEqual([i["name"] for i in self.listed(limit=1)], ["busy.exe"])
 
-    def test_the_30_days_follow_the_organization_time_zone(self):
+    def test_the_30_days_follow_indian_standard_time(self):
         ItemUsageDaily.objects.create(
-            organization=self.org, user=self.in_team, date=date(2026, 10, 31), item_type="app", name="old.exe", seconds=10
+            organization=self.org, user=self.in_team, date=date(2026, 11, 1), item_type="app", name="old.exe", seconds=10
+        )
+        ItemUsageDaily.objects.create(
+            organization=self.org, user=self.in_team, date=date(2026, 11, 2), item_type="app", name="inside.exe", seconds=10
         )
         late_utc = datetime(2026, 11, 30, 23, 30, tzinfo=timezone.utc)  # already 1 Dec in India
         with mock.patch("analytics.services.timezone.now", return_value=late_utc):
-            self.assertIn("old.exe", {i["name"] for i in unclassified_items(self.org, days=30)})
-            update_policy(self.admin, self.org, {"timezone": "Asia/Kolkata"})
-            self.assertNotIn("old.exe", {i["name"] for i in unclassified_items(self.org, days=30)})
+            names = {i["name"] for i in unclassified_items(self.org, days=30)}
+        self.assertIn("inside.exe", names)  # 2 Nov to 1 Dec is the last 30 days
+        self.assertNotIn("old.exe", names)
 
 
 class UnclassifiedPageTests(TestCase):

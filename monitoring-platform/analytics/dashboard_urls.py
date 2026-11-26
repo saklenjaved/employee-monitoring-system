@@ -5,6 +5,7 @@ from . import dashboards
 urlpatterns = [
     path("", dashboards.dashboard, name="dashboard"),
     path("me/", dashboards.my_dashboard, name="dashboard_me"),
+    path("employees/", dashboards.employee_index, name="dashboard_employees"),
     path("employees/<int:pk>/", dashboards.employee_dashboard, name="dashboard_employee"),
     path("employees/<int:pk>/live/", dashboards.employee_live_panel, name="dashboard_employee_live"),
     path("teams/", dashboards.teams_dashboard, name="dashboard_teams"),

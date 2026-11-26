@@ -35,9 +35,9 @@
   }
 
   function hours(value) {
-    var h = Math.floor(value);
-    var m = Math.round((value - h) * 60);
-    return h + "h " + String(m).padStart(2, "0") + "m";
+    // Round to whole minutes first, so 59.6 minutes shows as 1h 00m and never as 0h 60m.
+    var minutes = Math.round(value * 60);
+    return Math.floor(minutes / 60) + "h " + String(minutes % 60).padStart(2, "0") + "m";
   }
 
   function fillTable(table, data) {
