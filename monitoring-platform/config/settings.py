@@ -212,9 +212,10 @@ if RUNNING_TESTS:
     PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 LANGUAGE_CODE = "en-us"
-TIME_ZONE = "UTC"
-# Time zone for showing times to people (Audit logs). Stored times stay in UTC; the org policy zone is separate.
+# Time zone for showing times to people (Indian Standard Time). Stored times stay in UTC; the org policy zone is separate.
 DISPLAY_TIMEZONE = os.environ.get("DISPLAY_TIMEZONE", "Asia/Kolkata")
+# Django's default zone for showing times in templates: the same IST. Database values stay in UTC (USE_TZ = True).
+TIME_ZONE = DISPLAY_TIMEZONE
 USE_I18N = True
 USE_TZ = True
 

@@ -28,8 +28,10 @@
   }
 
   function shortDate(iso) {
-    var d = new Date(iso + "T00:00:00");
-    return d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    // The date is a calendar day (YYYY-MM-DD). Format it in UTC so the browser's own time zone cannot shift the day.
+    var parts = iso.split("-");
+    var d = new Date(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])));
+    return d.toLocaleDateString("en-IN", { day: "numeric", month: "short", timeZone: "UTC" });
   }
 
   function hours(value) {

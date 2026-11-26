@@ -1,5 +1,6 @@
 from zoneinfo import ZoneInfo
 
+from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
@@ -32,8 +33,11 @@ def timezone_for(organization):
 
 
 def zone_context(organization):
-    """The organization's time zone and its short name (for example IST), for showing times on a page."""
-    zone = timezone_for(organization)
+    """The zone for showing times on a page: Indian Standard Time (settings.DISPLAY_TIMEZONE), with its short name.
+
+    Only the display uses this. Daily totals keep using the organization's policy zone (timezone_for).
+    """
+    zone = ZoneInfo(settings.DISPLAY_TIMEZONE)
     return {"zone": zone, "zone_label": timezone.now().astimezone(zone).strftime("%Z")}
 
 
